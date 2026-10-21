@@ -1,0 +1,82 @@
+name: Probe Public API
+
+on:
+  push:
+    branches: [fix/authenticated-public-prices-isolation]
+    paths: [.github/workflows/probe-public-api.yml]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    name: Anonymous BE GraphQL contract probe
+    runs-on: ubuntu-latest
+    timeout-minutes: 7
+    steps:
+      - name: Probe public endpoints without credentials
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json
+          import urllib.request
+          import urllib.error
+          from datetime import date, timedelta
+
+          # No account data, auth tokens or private endpoints used.
+          today = date.today().isoformat()
+          tomorrow = (date.today() + timedelta(days=1)).isoformat()
+          minimal = """query MarketPrices($date: String!, $resolution: PriceResolution!) {
+             marketPrices(date: $date, resolution: $resolution) {
+               electricityPrices { from till resolution marketPrice marketPriceTax sourcingMarkupPrice energyTaxPrice perUnit }
+             }
+          }"""
+          full = """query MarketPrices($date: String!, $resolution: PriceResolution!) {
+             marketPrices(date: $date, resolution: $resolution) {
+               electricityPrices { from till resolution marketPrice marketPriceTax sourcingMarkupPrice energyTaxPrice perUnit __typename }
+               gasPrices { from till resolution marketPrice marketPriceTax sourcingMarkupPrice energyTaxPrice perUnit __typename }
+               __typename
+             }
+          }"""
+          cases = [
+            ("graphcdn", "BE", today, "PT15M", "minimal"),
+            ("graphcdn", "BE", today, "PT15M", "full"),
+            ("official", "BE", today, "PT15M", "minimal"),
+            ("official", "BE", today, "PT15M", "full"),
+            ("graphcdn", "NL", today, "PT15M", "minimal"),
+            ("graphcdn", "BE", tomorrow, "PT15M", "minimal"),
+            ("official", "BE", tomorrow, "PT15M", "minimal"),
+            ("graphcdn", "BE", today, "PT60M", "minimal"),
+          ]
+          endpoints = {
+            "graphcdn": "https://frank-graphql-prod.graphcdn.app/",
+            "official": "https://graphql.frankenergie.nl/",
+          }
+          success = 0
+          for endpoint, country, day, resolution, shape in cases:
+            payload = {"query": minimal if shape == "minimal" else full,
+                       "operationName": "MarketPrices", "variables": {"date": day, "resolution": resolution}}
+            headers = {"Content-Type": "application/json", "Accept": "application/json",
+                       "x-country": country}
+            req = urllib.request.Request(endpoints[endpoint], data=json.dumps(payload).encode(), headers=headers, method="POST")
+            try:
+              with urllib.request.urlopen(req, timeout=10) as response:
+                body = json.loads(response.read(250000))
+                errs = [str(e.get("message", ""))[:130] for e in body.get("errors", [])]
+                market = (body.get("data") or {}).get("marketPrices") or {}
+                electricity = market.get("electricityPrices")
+                gas = market.get("gasPrices")
+                count = len(electricity) if isinstance(electricity, list) else None
+                gas_count = len(gas) if isinstance(gas, list) else None
+                verdict = "OK" if not errs and isinstance(electricity, list) else "GRAPHQL_ERROR"
+                if verdict == "OK": success += 1
+                print(f"{endpoint} {country} {day} {resolution} {shape}: {verdict} electricity={count} gas={gas_count} errors={errs}", flush=True)
+            except urllib.error.HTTPError as err:
+              print(f"{endpoint} {country} {day} {resolution} {shape}: HTTP {err.code} {err.read(600)!r}", flush=True)
+            except Exception as err:
+              print(f"{endpoint} {country} {day} {resolution} {shape}: {type(err).__name__} {str(err)[:160]}", flush=True)
+          print(f"RESULT: {success}/{len(cases)} successful public query variants", flush=True)
+          # Probe is diagnostic; only fail if literally no endpoint works.
+          if not success: raise SystemExit("No public API variant succeeded")
+          PY
