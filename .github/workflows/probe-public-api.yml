@@ -93,4 +93,19 @@ jobs:
               print(f"{endpoint} x-country={country} {variant}: {type(err).__name__} {str(err)[:150]}",flush=True)
           print(f"RESULT: {success}/{len(matrix)} query variants succeeded",flush=True)
           if not success:raise SystemExit("No public API variant succeeded")
+
+          # Negative controls: GraphQL's generic validation error is expected
+          # when contract state supplies a missing or non-enum resolution.
+          for invalid in (None, "PT1H", "", "PT30M"):
+            broken = dict(payload)
+            broken["variables"] = {"date":target,"resolution":invalid}
+            req=urllib.request.Request(endpoints["graphcdn"],data=json.dumps(broken).encode(),
+              headers={"Content-Type":"application/json","x-country":"BE",**client_headers},method="POST")
+            try:
+              with urllib.request.urlopen(req,timeout=10) as response:
+                result=json.loads(response.read(3000))
+                errors=[e.get("message","") for e in result.get("errors",[])]
+                print(f"NEGATIVE resolution={invalid!r}: errors={errors}",flush=True)
+            except Exception as err:
+              print(f"NEGATIVE resolution={invalid!r}: transport={type(err).__name__} {str(err)[:100]}",flush=True)
           PY
