@@ -3,6 +3,7 @@
 Public MarketPrices must use an anonymous client even when a Frank Energie
 account is configured; customerMarketPrices must keep the authenticated one.
 """
+
 from datetime import date
 from unittest.mock import AsyncMock, MagicMock, patch, sentinel
 
