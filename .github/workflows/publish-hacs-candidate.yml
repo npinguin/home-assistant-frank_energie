@@ -4,6 +4,10 @@ on:
   push:
     branches:
       - fix/authenticated-public-prices-isolation
+    paths:
+      - custom_components/frank_energie/**
+      - pyproject.toml
+      - tests/**
 
 permissions:
   contents: write
