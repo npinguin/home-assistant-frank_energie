@@ -1800,6 +1800,19 @@ class FrankEnergieCoordinator(DataUpdateCoordinator[FrankEnergieData]):
             "serial_number": serial_number,
         }
 
+    def _get_public_api(self) -> FrankEnergie:
+        """Lazily create a credential-free client for public price queries.
+
+        Public country prices must not inherit an account's bearer token.
+        Avoid allocating a second client for coordinators that never fetch prices.
+        The HTTP session remains owned by Home Assistant.
+        """
+        client = getattr(self, "_public_api", None)
+        if client is None:
+            client = FrankEnergie(clientsession=async_get_clientsession(self.hass))
+            self._public_api = client
+        return client
+
     async def _fetch_public_prices_for_range(
         self, start_date: date, end_date: date, country_code: str
     ) -> MarketPrices | None:
@@ -1810,13 +1823,14 @@ class FrankEnergieCoordinator(DataUpdateCoordinator[FrankEnergieData]):
             self.resolution,
         )
 
+        public_api = self._get_public_api()
         try:
             if COUNTRY_USES_SIMPLE_MARKET_PRICES.get(country_code, False):
-                return await self._public_api.country_prices(
+                return await public_api.country_prices(
                     country_code, start_date, end_date, self.resolution
                 )
 
-            return await self._public_api.prices(
+            return await public_api.prices(
                 start_date,
                 resolution=self.resolution,
             )
@@ -2462,9 +2476,6 @@ class FrankEnergiePriceCoordinator(FrankEnergieCoordinator):
         self.name = "Frank Energie price coordinator"
         _LOGGER.debug("Initializing %s (country_code=%s)", self.name, self.country_code)
         self.settings_coordinator = settings_coordinator
-        # Public market prices must not inherit the authenticated user's token.
-        # Share HA's HTTP session, but use an independent anonymous API client.
-        self._public_api = FrankEnergie(clientsession=async_get_clientsession(hass))
         self.update_interval = None
         self.store = price_cache_store(hass, config_entry.entry_id)
 

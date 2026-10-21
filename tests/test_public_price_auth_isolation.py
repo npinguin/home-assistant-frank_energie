@@ -46,14 +46,15 @@ def clients():
 @pytest.mark.asyncio
 async def test_belgian_public_prices_are_anonymous_even_when_logged_in(clients):
     coordinator, authenticated, public, factory = clients
-    factory.assert_called_once_with(clientsession=sentinel.ha_session)
     assert coordinator.api is authenticated
-    assert coordinator._public_api is public
-    assert public.is_authenticated is False
+    factory.assert_not_called()  # client must be lazy
 
     start, end = date(2026, 10, 21), date(2026, 10, 22)
     result = await coordinator._fetch_public_prices_for_range(start, end, "BE")
 
+    factory.assert_called_once_with(clientsession=sentinel.ha_session)
+    assert coordinator._public_api is public
+    assert public.is_authenticated is False
     assert result is sentinel.public_prices
     public.country_prices.assert_awaited_once_with("BE", start, end, "PT15M")
     authenticated.country_prices.assert_not_awaited()
@@ -73,7 +74,7 @@ async def test_other_countries_public_prices_remain_anonymous(clients):
 
 @pytest.mark.asyncio
 async def test_customer_prices_still_use_authenticated_client(clients):
-    coordinator, authenticated, public, _ = clients
+    coordinator, authenticated, public, factory = clients
     coordinator._site_reference = "test-site"
     coordinator._user_country = "BE"
     start, end = date(2026, 10, 21), date(2026, 10, 22)
@@ -81,6 +82,7 @@ async def test_customer_prices_still_use_authenticated_client(clients):
     result = await coordinator._fetch_user_prices_for_range(start, end, "BE")
 
     assert result is sentinel.customer_prices
+    factory.assert_not_called()  # account-only queries do not create public client
     authenticated.user_prices.assert_awaited_once_with("test-site", "BE", start, end)
     public.country_prices.assert_not_awaited()
     public.prices.assert_not_awaited()
