@@ -27,6 +27,7 @@ from homeassistant.const import (
 )
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryAuthFailed
+from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.update_coordinator import (
     DataUpdateCoordinator,
     UpdateFailed,
@@ -1811,11 +1812,11 @@ class FrankEnergieCoordinator(DataUpdateCoordinator[FrankEnergieData]):
 
         try:
             if COUNTRY_USES_SIMPLE_MARKET_PRICES.get(country_code, False):
-                return await self.api.country_prices(
+                return await self._public_api.country_prices(
                     country_code, start_date, end_date, self.resolution
                 )
 
-            return await self.api.prices(
+            return await self._public_api.prices(
                 start_date,
                 resolution=self.resolution,
             )
@@ -2461,6 +2462,9 @@ class FrankEnergiePriceCoordinator(FrankEnergieCoordinator):
         self.name = "Frank Energie price coordinator"
         _LOGGER.debug("Initializing %s (country_code=%s)", self.name, self.country_code)
         self.settings_coordinator = settings_coordinator
+        # Public market prices must not inherit the authenticated user's token.
+        # Share HA's HTTP session, but use an independent anonymous API client.
+        self._public_api = FrankEnergie(clientsession=async_get_clientsession(hass))
         self.update_interval = None
         self.store = price_cache_store(hass, config_entry.entry_id)
 
