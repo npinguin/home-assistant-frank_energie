@@ -37,7 +37,9 @@ def clients():
         public.is_authenticated = False
         public.country_prices = AsyncMock(return_value=sentinel.public_prices)
         public.prices = AsyncMock(return_value=sentinel.public_prices)
-        coordinator = FrankEnergiePriceCoordinator(hass, entry, authenticated, MagicMock())
+        coordinator = FrankEnergiePriceCoordinator(
+            hass, entry, authenticated, MagicMock()
+        )
         yield coordinator, authenticated, public, factory
 
 
