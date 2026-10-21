@@ -15,6 +15,14 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 7
     steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - name: Print exact Ruff formatter changes (diagnostic only)
+        shell: bash
+        run: |
+          python3 -m pip install -q ruff==0.15.18
+          ruff format --diff tests/test_public_price_auth_isolation.py || true
       - name: Anonymous API request matrix (no credentials)
         shell: bash
         run: |
