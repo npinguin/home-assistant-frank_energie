@@ -294,7 +294,10 @@ async def test_reconfigure_anonymous_entry_to_authenticated_site(
     assert "username" not in anonymous.data
     assert "password" not in anonymous.data
     assert anonymous.options["username"] == USER_INPUT["username"]
-    assert decrypt_password(hass, anonymous.options["password"]) == USER_INPUT["password"]
+    assert (
+        decrypt_password(hass, anonymous.options["password"])
+        == USER_INPUT["password"]
+    )
     assert anonymous.options["resolution"] == "PT15M"
     await hass.async_block_till_done()
 
@@ -311,7 +314,10 @@ async def test_reconfigure_anonymous_invalid_login_preserves_entry(
     anonymous.add_to_hass(hass)
     flow = await hass.config_entries.flow.async_init(
         DOMAIN,
-        context={"source": config_entries.SOURCE_RECONFIGURE, "entry_id": anonymous.entry_id},
+        context={
+            "source": config_entries.SOURCE_RECONFIGURE,
+            "entry_id": anonymous.entry_id,
+        },
     )
     result = await hass.config_entries.flow.async_configure(
         flow["flow_id"], user_input=USER_INPUT
@@ -337,7 +343,10 @@ async def test_reconfigure_anonymous_no_delivery_sites_preserves_entry(
     anonymous.add_to_hass(hass)
     flow = await hass.config_entries.flow.async_init(
         DOMAIN,
-        context={"source": config_entries.SOURCE_RECONFIGURE, "entry_id": anonymous.entry_id},
+        context={
+            "source": config_entries.SOURCE_RECONFIGURE,
+            "entry_id": anonymous.entry_id,
+        },
     )
     result = await hass.config_entries.flow.async_configure(
         flow["flow_id"], user_input=USER_INPUT
@@ -372,7 +381,10 @@ async def test_reconfigure_anonymous_multiple_sites_selects_explicit_site(
 
     flow = await hass.config_entries.flow.async_init(
         DOMAIN,
-        context={"source": config_entries.SOURCE_RECONFIGURE, "entry_id": anonymous.entry_id},
+        context={
+            "source": config_entries.SOURCE_RECONFIGURE,
+            "entry_id": anonymous.entry_id,
+        },
     )
     site_form = await hass.config_entries.flow.async_configure(
         flow["flow_id"], user_input=USER_INPUT
