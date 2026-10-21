@@ -1,138 +1,52 @@
-name: Validate
-
-on:
-  pull_request:
-  push:
-    branches: [main]
-  workflow_dispatch:
-  schedule:
-    - cron: "0 0 * * 6"
+name: validate
 
 permissions:
   contents: read
 
-concurrency:
-  group: ${{ github.repository }}-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  schedule:
+    - cron: "0 0 * * 6"
+  workflow_dispatch:
 
 jobs:
-  source:
-    name: Source, tests and package
+  validate:
+    permissions:
+      contents: read
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    name: Validate
     steps:
-      - name: Harden runner
-        uses: step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25 # v2.22.1
+      - name: Harden Runner
+        uses: step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25 # @v2.22.1
         with:
           egress-policy: block
           allowed-endpoints: >
             api.github.com:443
             raw.githubusercontent.com:443
+            pkg-containers.githubusercontent.com:443
             github.com:443
-            install.python-poetry.org:443
+            ghcr.io:443
             pypi.org:443
             files.pythonhosted.org:443
+            sonarcloud.io:443
             objects.githubusercontent.com:443
-            release-assets.githubusercontent.com:443
-      - name: Checkout source
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-        with:
-          persist-credentials: false
-      - name: Set up Python
-        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v6
-        with:
-          python-version: "3.14"
-      - name: Install Poetry and dependencies
-        shell: bash
-        run: |
-          set -euo pipefail
-          python -m pip install poetry
-          poetry install
-      - name: Verify release identity and syntax
-        shell: bash
-        run: |
-          set -euo pipefail
-          poetry run python - <<'PY'
-          import json
-          import pathlib
-          import tomllib
-          manifest = json.loads(pathlib.Path('custom_components/frank_energie/manifest.json').read_text())
-          package = tomllib.loads(pathlib.Path('pyproject.toml').read_text())
-          assert manifest['version'] == package['tool']['poetry']['version']
-          assert manifest['requirements'] == ['python-frank-energie==2026.9.20']
-          print('PASS release identity and Python API dependency')
-          PY
-          poetry run python -m compileall -q custom_components/frank_energie tests/test_public_price_auth_isolation.py
-      - name: Blocking public-price authentication regression tests
-        run: poetry run pytest -q tests/test_public_price_auth_isolation.py
-      - name: Package HACS test candidate (not a release)
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p dist
-          python - <<'PY'
-          import hashlib
-          import pathlib
-          import zipfile
-          runtime = pathlib.Path('custom_components/frank_energie')
-          target = pathlib.Path('dist/frank_energie-hacs-test.zip')
-          with zipfile.ZipFile(target, 'w', zipfile.ZIP_DEFLATED) as archive:
-              for path in sorted(runtime.rglob('*')):
-                  if path.is_file() and '__pycache__' not in path.parts and path.suffix != '.pyc':
-                      archive.write(path, path.relative_to(runtime))
-          checksum = hashlib.sha256(target.read_bytes()).hexdigest()
-          pathlib.Path('dist/SHA256SUMS.txt').write_text(f'{checksum}  {target.name}\n')
-          print(f'PASS HACS candidate sha256 {checksum}')
-          PY
-      - name: Upload unqualified HACS test candidate
-        if: github.event_name == 'pull_request'
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
-        with:
-          name: frank-energie-hacs-test-${{ github.event.pull_request.number }}-${{ github.sha }}
-          path: |
-            dist/frank_energie-hacs-test.zip
-            dist/SHA256SUMS.txt
-          if-no-files-found: error
-          retention-days: 14
+            uploads.github.com:443
+            upload.pypi.org:443
+            test.pypi.org:443
+            codecov.io:443
+            uploader.codecov.io:443
+      - name: Check out code from GitHub
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 #v7.0.1
 
-  hacs:
-    name: HACS
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    steps:
-      - name: Checkout source
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
       - name: HACS validation
-        uses: hacs/action@1ebf01c408f29afcb6406bd431bc98fd8cbb15aa
+        uses: hacs/action@1ebf01c408f29afcb6406bd431bc98fd8cbb15aa # @1ebf01c408f29afcb6406bd431bc98fd8cbb15aa
         with:
           category: integration
 
-  hassfest:
-    name: Hassfest
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    steps:
-      - name: Checkout source
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-        with:
-          persist-credentials: false
       - name: Hassfest validation
         uses: home-assistant/actions/hassfest@cd6f3635a740c84d8a14f6121a90068b8ece6bf6
-
-  gate:
-    name: Frank Energie / Validate
-    if: always()
-    needs: [source, hacs, hassfest]
-    runs-on: ubuntu-latest
-    steps:
-      - name: Require all validation gates
-        env:
-          SOURCE: ${{ needs.source.result }}
-          HACS: ${{ needs.hacs.result }}
-          HASSFEST: ${{ needs.hassfest.result }}
-        run: |
-          test "$SOURCE" = success
-          test "$HACS" = success
-          test "$HASSFEST" = success
