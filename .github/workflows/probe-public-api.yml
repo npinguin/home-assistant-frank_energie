@@ -11,11 +11,11 @@ permissions:
 
 jobs:
   probe:
-    name: Anonymous BE GraphQL contract probe
+    name: Compare exact Python client GraphQL request headers
     runs-on: ubuntu-latest
     timeout-minutes: 7
     steps:
-      - name: Probe public endpoints without credentials
+      - name: Anonymous API request matrix (no credentials)
         shell: bash
         run: |
           python3 - <<'PY'
@@ -24,59 +24,73 @@ jobs:
           import urllib.error
           from datetime import date, timedelta
 
-          # No account data, auth tokens or private endpoints used.
-          today = date.today().isoformat()
-          tomorrow = (date.today() + timedelta(days=1)).isoformat()
-          minimal = """query MarketPrices($date: String!, $resolution: PriceResolution!) {
-             marketPrices(date: $date, resolution: $resolution) {
-               electricityPrices { from till resolution marketPrice marketPriceTax sourcingMarkupPrice energyTaxPrice perUnit }
-             }
+          target = (date.today() + timedelta(days=1)).isoformat()
+          query = """query MarketPrices ($date: String!, $resolution: PriceResolution!) {
+              marketPrices(date: $date, resolution: $resolution) {
+                  electricityPrices {
+                      from
+                      till
+                      resolution
+                      marketPrice
+                      marketPriceTax
+                      sourcingMarkupPrice
+                      energyTaxPrice
+                      perUnit
+                      __typename
+                  }
+                  gasPrices {
+                      from
+                      till
+                      resolution
+                      marketPrice
+                      marketPriceTax
+                      sourcingMarkupPrice
+                      energyTaxPrice
+                      perUnit
+                      __typename
+                  }
+                  __typename
+              }
           }"""
-          full = """query MarketPrices($date: String!, $resolution: PriceResolution!) {
-             marketPrices(date: $date, resolution: $resolution) {
-               electricityPrices { from till resolution marketPrice marketPriceTax sourcingMarkupPrice energyTaxPrice perUnit __typename }
-               gasPrices { from till resolution marketPrice marketPriceTax sourcingMarkupPrice energyTaxPrice perUnit __typename }
-               __typename
-             }
-          }"""
-          cases = [
-            ("graphcdn", "BE", today, "PT15M", "minimal"),
-            ("graphcdn", "BE", today, "PT15M", "full"),
-            ("official", "BE", today, "PT15M", "minimal"),
-            ("official", "BE", today, "PT15M", "full"),
-            ("graphcdn", "NL", today, "PT15M", "minimal"),
-            ("graphcdn", "BE", tomorrow, "PT15M", "minimal"),
-            ("official", "BE", tomorrow, "PT15M", "minimal"),
-            ("graphcdn", "BE", today, "PT60M", "minimal"),
-          ]
-          endpoints = {
-            "graphcdn": "https://frank-graphql-prod.graphcdn.app/",
-            "official": "https://graphql.frankenergie.nl/",
+          payload = {"query":query, "operationName":"MarketPrices",
+                     "variables":{"date":target,"resolution":"PT15M"}}
+          endpoints={"graphcdn":"https://frank-graphql-prod.graphcdn.app/",
+                     "official":"https://graphql.frankenergie.nl/"}
+          client_headers={
+            "x-graphql-client-version":"4.13.3",
+            "x-graphql-client-name":"frank-app",
+            "x-graphql-client-os":"ios/26.0.1",
+            "skip-graphcdn":"1",
           }
+          matrix=[
+            ("graphcdn","BE","plain",{}),
+            ("graphcdn","BE","client_full",client_headers),
+            ("graphcdn","BE","client_no_skip",{k:v for k,v in client_headers.items() if k != "skip-graphcdn"}),
+            ("graphcdn","BE","skip_only",{"skip-graphcdn":"1"}),
+            ("official","BE","plain",{}),
+            ("official","BE","client_full",client_headers),
+            ("graphcdn","be","client_full",client_headers),
+            ("graphcdn","NL","client_full",client_headers),
+          ]
           success = 0
-          for endpoint, country, day, resolution, shape in cases:
-            payload = {"query": minimal if shape == "minimal" else full,
-                       "operationName": "MarketPrices", "variables": {"date": day, "resolution": resolution}}
-            headers = {"Content-Type": "application/json", "Accept": "application/json",
-                       "x-country": country}
-            req = urllib.request.Request(endpoints[endpoint], data=json.dumps(payload).encode(), headers=headers, method="POST")
+          for endpoint,country,variant,extra in matrix:
+            headers={"Content-Type":"application/json","Accept":"application/json","x-country":country,**extra}
+            req=urllib.request.Request(endpoints[endpoint],data=json.dumps(payload).encode(),
+                                       headers=headers,method="POST")
             try:
-              with urllib.request.urlopen(req, timeout=10) as response:
-                body = json.loads(response.read(250000))
-                errs = [str(e.get("message", ""))[:130] for e in body.get("errors", [])]
-                market = (body.get("data") or {}).get("marketPrices") or {}
-                electricity = market.get("electricityPrices")
-                gas = market.get("gasPrices")
-                count = len(electricity) if isinstance(electricity, list) else None
-                gas_count = len(gas) if isinstance(gas, list) else None
-                verdict = "OK" if not errs and isinstance(electricity, list) else "GRAPHQL_ERROR"
-                if verdict == "OK": success += 1
-                print(f"{endpoint} {country} {day} {resolution} {shape}: {verdict} electricity={count} gas={gas_count} errors={errs}", flush=True)
+              with urllib.request.urlopen(req,timeout=10) as response:
+                result=json.loads(response.read(250000))
+                errors=[str(e.get("message",""))[:140] for e in result.get("errors",[])]
+                market=(result.get("data") or {}).get("marketPrices") or {}
+                electricity=market.get("electricityPrices")
+                gas=market.get("gasPrices")
+                verdict="OK" if not errors and isinstance(electricity,list) else "GRAPHQL_ERROR"
+                if verdict=="OK":success+=1
+                print(f"{endpoint} x-country={country} {variant}: {verdict} electricity={len(electricity) if isinstance(electricity,list) else None} gas={len(gas) if isinstance(gas,list) else None} errors={errors}",flush=True)
             except urllib.error.HTTPError as err:
-              print(f"{endpoint} {country} {day} {resolution} {shape}: HTTP {err.code} {err.read(600)!r}", flush=True)
+              print(f"{endpoint} x-country={country} {variant}: HTTP {err.code} body={err.read(500)!r}",flush=True)
             except Exception as err:
-              print(f"{endpoint} {country} {day} {resolution} {shape}: {type(err).__name__} {str(err)[:160]}", flush=True)
-          print(f"RESULT: {success}/{len(cases)} successful public query variants", flush=True)
-          # Probe is diagnostic; only fail if literally no endpoint works.
-          if not success: raise SystemExit("No public API variant succeeded")
+              print(f"{endpoint} x-country={country} {variant}: {type(err).__name__} {str(err)[:150]}",flush=True)
+          print(f"RESULT: {success}/{len(matrix)} query variants succeeded",flush=True)
+          if not success:raise SystemExit("No public API variant succeeded")
           PY
