@@ -1,4 +1,4 @@
-name: Flake8 and pytest
+name: Validate
 
 on:
   push:
@@ -9,10 +9,10 @@ permissions:
   contents: read
 
 jobs:
-  run:
+  source:
     permissions:
       contents: read
-    name: Run flake8/pytest (Python ${{ matrix.python-version }})
+    name: Source, tests and package (Python ${{ matrix.python-version }})
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -75,3 +75,95 @@ jobs:
       - name: Test with pytest
         run: |
           poetry run pytest -v --capture=no
+
+      - name: Verify manifest release identity
+        run: |
+          poetry run python - <<'PY'
+          import json
+          import pathlib
+          import tomllib
+          manifest = json.loads(pathlib.Path('custom_components/frank_energie/manifest.json').read_text())
+          metadata = tomllib.loads(pathlib.Path('pyproject.toml').read_text())
+          assert manifest['version'] == metadata['tool']['poetry']['version']
+          assert manifest['requirements'] == ['python-frank-energie==2026.9.20']
+          print('PASS consistent release identity and pinned Python client')
+          PY
+
+      - name: Build unqualified HACS test package
+        if: github.event_name == 'pull_request' && matrix.python-version == '3.14'
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          python - <<'PY'
+          import hashlib
+          from pathlib import Path
+          from zipfile import ZipFile, ZIP_DEFLATED
+          root = Path('custom_components/frank_energie')
+          output = Path('dist/frank_energie-hacs-test.zip')
+          with ZipFile(output, 'w', ZIP_DEFLATED) as archive:
+              for entry in sorted(root.rglob('*')):
+                  if entry.is_file() and '__pycache__' not in entry.parts and entry.suffix != '.pyc':
+                      archive.write(entry, entry.relative_to(root))
+          digest = hashlib.sha256(output.read_bytes()).hexdigest()
+          Path('dist/SHA256SUMS.txt').write_text(f'{digest}  {output.name}\n')
+          print(f'PASS test package SHA256={digest}')
+          PY
+
+      - name: Upload unqualified HACS test package
+        if: github.event_name == 'pull_request' && matrix.python-version == '3.14'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: frank-energie-hacs-test-${{ github.event.pull_request.number }}-${{ github.sha }}
+          path: |
+            dist/frank_energie-hacs-test.zip
+            dist/SHA256SUMS.txt
+          if-no-files-found: error
+          retention-days: 14
+
+  hacs:
+    name: HACS
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - name: Validate HACS package
+        uses: hacs/action@1ebf01c408f29afcb6406bd431bc98fd8cbb15aa
+        with:
+          category: integration
+
+  hassfest:
+    name: Hassfest
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - name: Validate Home Assistant integration
+        uses: home-assistant/actions/hassfest@cd6f3635a740c84d8a14f6121a90068b8ece6bf6
+
+  gate:
+    name: Frank Energie / Validate
+    if: always()
+    needs: [source, hacs, hassfest]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Require authoritative validation gates
+        env:
+          SOURCE: ${{ needs.source.result }}
+          HACS: ${{ needs.hacs.result }}
+          HASSFEST: ${{ needs.hassfest.result }}
+        run: |
+          set -euo pipefail
+          test "$SOURCE" = success
+          test "$HACS" = success
+          test "$HASSFEST" = success
