@@ -139,6 +139,4 @@ async def test_invalid_api_resolution_falls_back_while_change_pending(clients):
 
     await coordinator._fetch_public_prices_for_range(start, end, "BE")
 
-    public.country_prices.assert_awaited_once_with(
-        "BE", start, end, "PT60M"
-    )
+    public.country_prices.assert_awaited_once_with("BE", start, end, "PT60M")
