@@ -39,7 +39,7 @@ jobs:
           from pathlib import Path
           manifest = json.loads(Path('custom_components/frank_energie/manifest.json').read_text())
           project = tomllib.loads(Path('pyproject.toml').read_text())
-          assert manifest['version'] == '2026.10.21.1', 'Unexpected version: do not silently republish'
+          assert manifest['version'] == '2026.10.21.2', 'Unexpected version: do not silently republish'
           assert manifest['version'] == project['tool']['poetry']['version']
           assert manifest['requirements'] == ['python-frank-energie==2026.9.20']
           assert json.loads(Path('hacs.json').read_text())['zip_release'] is True
@@ -106,7 +106,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          TAG=v2026.10.21.1
+          TAG=v2026.10.21.2
           if gh release view "$TAG" >/dev/null 2>&1; then
             echo "BLOCK: release already exists; immutable candidate versions cannot be republished"
             exit 1
