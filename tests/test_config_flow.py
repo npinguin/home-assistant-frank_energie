@@ -295,8 +295,7 @@ async def test_reconfigure_anonymous_entry_to_authenticated_site(
     assert "password" not in anonymous.data
     assert anonymous.options["username"] == USER_INPUT["username"]
     assert (
-        decrypt_password(hass, anonymous.options["password"])
-        == USER_INPUT["password"]
+        decrypt_password(hass, anonymous.options["password"]) == USER_INPUT["password"]
     )
     assert anonymous.options["resolution"] == "PT15M"
     await hass.async_block_till_done()
