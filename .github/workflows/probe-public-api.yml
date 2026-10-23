@@ -1,0 +1,119 @@
+name: Probe Public API
+
+on:
+  push:
+    branches: [fix/authenticated-public-prices-isolation]
+    paths: [.github/workflows/probe-public-api.yml]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    name: Compare exact Python client GraphQL request headers
+    runs-on: ubuntu-latest
+    timeout-minutes: 7
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - name: Print exact Ruff formatter changes (diagnostic only)
+        shell: bash
+        run: |
+          python3 -m pip install -q ruff==0.15.18
+          ruff format --diff tests/test_public_price_auth_isolation.py || true
+      - name: Anonymous API request matrix (no credentials)
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json
+          import urllib.request
+          import urllib.error
+          from datetime import date, timedelta
+
+          target = (date.today() + timedelta(days=1)).isoformat()
+          query = """query MarketPrices ($date: String!, $resolution: PriceResolution!) {
+              marketPrices(date: $date, resolution: $resolution) {
+                  electricityPrices {
+                      from
+                      till
+                      resolution
+                      marketPrice
+                      marketPriceTax
+                      sourcingMarkupPrice
+                      energyTaxPrice
+                      perUnit
+                      __typename
+                  }
+                  gasPrices {
+                      from
+                      till
+                      resolution
+                      marketPrice
+                      marketPriceTax
+                      sourcingMarkupPrice
+                      energyTaxPrice
+                      perUnit
+                      __typename
+                  }
+                  __typename
+              }
+          }"""
+          payload = {"query":query, "operationName":"MarketPrices",
+                     "variables":{"date":target,"resolution":"PT15M"}}
+          endpoints={"graphcdn":"https://frank-graphql-prod.graphcdn.app/",
+                     "official":"https://graphql.frankenergie.nl/"}
+          client_headers={
+            "x-graphql-client-version":"4.13.3",
+            "x-graphql-client-name":"frank-app",
+            "x-graphql-client-os":"ios/26.0.1",
+            "skip-graphcdn":"1",
+          }
+          matrix=[
+            ("graphcdn","BE","plain",{}),
+            ("graphcdn","BE","client_full",client_headers),
+            ("graphcdn","BE","client_no_skip",{k:v for k,v in client_headers.items() if k != "skip-graphcdn"}),
+            ("graphcdn","BE","skip_only",{"skip-graphcdn":"1"}),
+            ("official","BE","plain",{}),
+            ("official","BE","client_full",client_headers),
+            ("graphcdn","be","client_full",client_headers),
+            ("graphcdn","NL","client_full",client_headers),
+          ]
+          success = 0
+          for endpoint,country,variant,extra in matrix:
+            headers={"Content-Type":"application/json","Accept":"application/json","x-country":country,**extra}
+            req=urllib.request.Request(endpoints[endpoint],data=json.dumps(payload).encode(),
+                                       headers=headers,method="POST")
+            try:
+              with urllib.request.urlopen(req,timeout=10) as response:
+                result=json.loads(response.read(250000))
+                errors=[str(e.get("message",""))[:140] for e in result.get("errors",[])]
+                market=(result.get("data") or {}).get("marketPrices") or {}
+                electricity=market.get("electricityPrices")
+                gas=market.get("gasPrices")
+                verdict="OK" if not errors and isinstance(electricity,list) else "GRAPHQL_ERROR"
+                if verdict=="OK":success+=1
+                print(f"{endpoint} x-country={country} {variant}: {verdict} electricity={len(electricity) if isinstance(electricity,list) else None} gas={len(gas) if isinstance(gas,list) else None} errors={errors}",flush=True)
+            except urllib.error.HTTPError as err:
+              print(f"{endpoint} x-country={country} {variant}: HTTP {err.code} body={err.read(500)!r}",flush=True)
+            except Exception as err:
+              print(f"{endpoint} x-country={country} {variant}: {type(err).__name__} {str(err)[:150]}",flush=True)
+          print(f"RESULT: {success}/{len(matrix)} query variants succeeded",flush=True)
+          if not success:raise SystemExit("No public API variant succeeded")
+
+          # Negative controls: GraphQL's generic validation error is expected
+          # when contract state supplies a missing or non-enum resolution.
+          for invalid in (None, "PT1H", "", "PT30M"):
+            broken = dict(payload)
+            broken["variables"] = {"date":target,"resolution":invalid}
+            req=urllib.request.Request(endpoints["graphcdn"],data=json.dumps(broken).encode(),
+              headers={"Content-Type":"application/json","x-country":"BE",**client_headers},method="POST")
+            try:
+              with urllib.request.urlopen(req,timeout=10) as response:
+                result=json.loads(response.read(3000))
+                errors=[e.get("message","") for e in result.get("errors",[])]
+                print(f"NEGATIVE resolution={invalid!r}: errors={errors}",flush=True)
+            except Exception as err:
+              print(f"NEGATIVE resolution={invalid!r}: transport={type(err).__name__} {str(err)[:100]}",flush=True)
+          PY

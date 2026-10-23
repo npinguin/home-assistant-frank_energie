@@ -27,6 +27,7 @@ from homeassistant.const import (
 )
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryAuthFailed
+from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.update_coordinator import (
     DataUpdateCoordinator,
     UpdateFailed,
@@ -67,6 +68,7 @@ from .const import (
     TIMEZONE_AMSTERDAM,
     TOMORROW_PUBLICATION_HOUR_LOCAL,
     SUPPORTED_COUNTRIES,
+    SUPPORTED_RESOLUTIONS,
     COUNTRY_USES_SIMPLE_MARKET_PRICES,
     DATA_BATTERIES,
     DATA_BATTERY_DETAILS,
@@ -1799,6 +1801,19 @@ class FrankEnergieCoordinator(DataUpdateCoordinator[FrankEnergieData]):
             "serial_number": serial_number,
         }
 
+    def _get_public_api(self) -> FrankEnergie:
+        """Lazily create a credential-free client for public price queries.
+
+        Public country prices must not inherit an account's bearer token.
+        Avoid allocating a second client for coordinators that never fetch prices.
+        The HTTP session remains owned by Home Assistant.
+        """
+        client = getattr(self, "_public_api", None)
+        if client is None:
+            client = FrankEnergie(clientsession=async_get_clientsession(self.hass))
+            self._public_api = client
+        return client
+
     async def _fetch_public_prices_for_range(
         self, start_date: date, end_date: date, country_code: str
     ) -> MarketPrices | None:
@@ -1809,13 +1824,14 @@ class FrankEnergieCoordinator(DataUpdateCoordinator[FrankEnergieData]):
             self.resolution,
         )
 
+        public_api = self._get_public_api()
         try:
             if COUNTRY_USES_SIMPLE_MARKET_PRICES.get(country_code, False):
-                return await self.api.country_prices(
+                return await public_api.country_prices(
                     country_code, start_date, end_date, self.resolution
                 )
 
-            return await self.api.prices(
+            return await public_api.prices(
                 start_date,
                 resolution=self.resolution,
             )
@@ -1834,6 +1850,15 @@ class FrankEnergieCoordinator(DataUpdateCoordinator[FrankEnergieData]):
         except NetworkError as err:
             _LOGGER.warning("Failed to fetch public prices: %s", err)
             return None
+
+        except FrankEnergieException:
+            _LOGGER.error(
+                "Public MarketPrices failed (country=%s date=%s resolution=%s)",
+                country_code,
+                start_date,
+                self.resolution,
+            )
+            raise
 
     async def _fetch_user_prices_for_range(
         self,
@@ -2294,14 +2319,30 @@ class FrankEnergieCoordinator(DataUpdateCoordinator[FrankEnergieData]):
 
     @property
     def resolution(self) -> str:
-        """Effective price resolution used for API queries."""
+        """Return a GraphQL-supported resolution, even for non-dynamic contracts.
+
+        An authenticated account can return an empty or unsupported
+        contractPriceResolutionState.activeOption. Never pass that value
+        straight into GraphQL's required PriceResolution enum.
+        """
         if self.config_entry is None:
             return DEFAULT_RESOLUTION
 
-        if self._api_resolution_state and not self._resolution_change_pending:
-            return self._api_resolution_state.activeOption
+        configured = self.config_entry.options.get("resolution", DEFAULT_RESOLUTION)
+        if configured not in SUPPORTED_RESOLUTIONS:
+            configured = DEFAULT_RESOLUTION
 
-        return self.config_entry.options.get("resolution", DEFAULT_RESOLUTION)
+        if self._api_resolution_state and not self._resolution_change_pending:
+            active = self._api_resolution_state.activeOption
+            if active in SUPPORTED_RESOLUTIONS:
+                return active
+            _LOGGER.debug(
+                "Ignoring unsupported contract price resolution %r; using %s",
+                active,
+                configured,
+            )
+
+        return configured
 
     @property
     def api_resolution(self) -> str | None:

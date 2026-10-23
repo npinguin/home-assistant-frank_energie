@@ -1011,15 +1011,18 @@ async def test_fetch_public_prices_for_range_uses_country_prices(
     start_date = date(2026, 7, 22)
     end_date = date(2026, 7, 23)
     expected = MagicMock()
-    mock_frank_energie.country_prices = AsyncMock(return_value=expected)
+    public_api = MagicMock()
+    public_api.country_prices = AsyncMock(return_value=expected)
+    coordinator._get_public_api = MagicMock(return_value=public_api)
 
     result = await coordinator._fetch_public_prices_for_range(
         start_date, end_date, country_code
     )
 
-    mock_frank_energie.country_prices.assert_awaited_once_with(
+    public_api.country_prices.assert_awaited_once_with(
         country_code, start_date, end_date, coordinator.resolution
     )
+    mock_frank_energie.country_prices.assert_not_awaited()
     mock_frank_energie.prices.assert_not_awaited()
     assert result is expected
 
@@ -1034,15 +1037,18 @@ async def test_fetch_public_prices_for_range_nl_uses_default_prices_query(
     start_date = date(2026, 7, 22)
     end_date = date(2026, 7, 23)
     expected = MagicMock()
-    mock_frank_energie.prices = AsyncMock(return_value=expected)
+    public_api = MagicMock()
+    public_api.prices = AsyncMock(return_value=expected)
+    coordinator._get_public_api = MagicMock(return_value=public_api)
 
     result = await coordinator._fetch_public_prices_for_range(
         start_date, end_date, "NL"
     )
 
-    mock_frank_energie.prices.assert_awaited_once_with(
+    public_api.prices.assert_awaited_once_with(
         start_date, resolution=coordinator.resolution
     )
+    mock_frank_energie.prices.assert_not_awaited()
     mock_frank_energie.country_prices.assert_not_awaited()
     assert result is expected
 
