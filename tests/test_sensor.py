@@ -1382,11 +1382,12 @@ async def test_battery_strategy_sensor_passes_ha_enum_validation(
         ("propositionType", "DYNAMIC", "dynamic"),
         ("propositionType", None, "unavailable"),
         ("propositionType", "unknown", "unavailable"),
-        ("propositionType", "MODEL", "unavailable"),
+        ("propositionType", "MODEL", "model"),
         ("meterType", "SLM", "slm"),
         ("meterType", None, "unavailable"),
         ("meterType", "unknown", "unavailable"),
-        ("meterType", "SMR3", "unavailable"),
+        ("meterType", "SMR1", "smr1"),
+        ("meterType", "SMR3", "smr3"),
     ],
 )
 async def test_account_enum_sensors_pass_real_ha_validation(
@@ -1461,3 +1462,48 @@ async def test_account_enum_guard_preserves_valid_unknown_option(
         hass, lambda entry: FrankEnergieSensor(coordinator, desc, entry)
     )
     assert state == "unknown"
+
+
+def test_meter_type_preserves_electricity_and_gas_without_new_entities() -> None:
+    """The legacy single meter entity exposes actual per-segment raw types."""
+    from types import SimpleNamespace
+
+    from custom_components.frank_energie.sensor import SENSOR_TYPES
+
+    description = next(d for d in SENSOR_TYPES if d.key == "meterType")
+    # Gas intentionally comes first; electricity is the primary sensor value.
+    data = {
+        const.DATA_USER: SimpleNamespace(
+            connections=[
+                {"segment": "GAS", "meterType": "SMR1"},
+                {"segment": "ELECTRICITY", "meterType": "SMR3"},
+            ]
+        )
+    }
+    assert description.value_fn(data) == "smr3"
+    assert description.attr_fn(data)["meter_types_by_segment"] == {
+        "gas": "smr1",
+        "electricity": "smr3",
+    }
+
+
+def test_account_enum_options_match_shipped_translations() -> None:
+    """HA enum options must have labels in every supported shipped language."""
+    import json
+    from pathlib import Path
+
+    from custom_components.frank_energie.sensor import SENSOR_TYPES
+
+    root = Path(__file__).parents[1].joinpath("custom_components/frank_energie")
+    for key in ("propositionType", "meterType"):
+        description = next(d for d in SENSOR_TYPES if d.key == key)
+        for translation in [
+            root / "strings.json",
+            root / "translations/en.json",
+            root / "translations/nl.json",
+            root / "translations/nl-BE.json",
+            root / "translations/fr.json",
+        ]:
+            payload = json.loads(translation.read_text(encoding="utf-8"))
+            states = payload["entity"]["sensor"][description.translation_key]["state"]
+            assert set(states) == set(description.options), translation
