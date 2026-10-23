@@ -15,7 +15,7 @@ permissions:
 
 concurrency:
   group: frank-energie-account-enum-candidate
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   publish:
@@ -106,6 +106,12 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
+          # Only the currently reviewed candidate head may create this tag.
+          CURRENT_SHA=$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/fix/account-enum-ha-2026-10-23" --jq '.object.sha')
+          if [ "$CURRENT_SHA" != "$GITHUB_SHA" ]; then
+            echo "BLOCK: stale candidate SHA ${GITHUB_SHA}; latest is ${CURRENT_SHA}"
+            exit 1
+          fi
           TAG=v2026.10.23.1
           if gh release view "$TAG" >/dev/null 2>&1; then
             echo "BLOCK: release already exists; immutable candidate versions cannot be republished"
