@@ -717,7 +717,9 @@
       "meter_type": {
         "name": "Meter Type",
         "state": {
-          "slm": "Smart meter"
+          "slm": "Smart meter",
+          "smr1": "SMR1",
+          "smr3": "SMR3"
         }
       },
       "phone_number": {
@@ -729,7 +731,8 @@
       "proposition_type": {
         "name": "Proposition type",
         "state": {
-          "dynamic": "Dynamic"
+          "dynamic": "Dynamic",
+          "model": "Model"
         }
       },
       "pv_operational_status": {
