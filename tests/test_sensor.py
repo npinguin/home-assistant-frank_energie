@@ -1415,14 +1415,10 @@ async def test_account_enum_sensors_pass_real_ha_validation(
             )
         }
     elif sensor_key == "propositionType":
-        data = {
-            const.DATA_USER_SITES: SimpleNamespace(propositionType=api_value)
-        }
+        data = {const.DATA_USER_SITES: SimpleNamespace(propositionType=api_value)}
     else:
         data = {
-            const.DATA_USER: SimpleNamespace(
-                connections=[{"meterType": api_value}]
-            )
+            const.DATA_USER: SimpleNamespace(connections=[{"meterType": api_value}])
         }
 
     coordinator = MagicMock()
@@ -1507,7 +1503,6 @@ def test_account_enum_options_match_shipped_translations() -> None:
             payload = json.loads(translation.read_text(encoding="utf-8"))
             states = payload["entity"]["sensor"][description.translation_key]["state"]
             assert set(states) == set(description.options), translation
-
 
 
 def test_service_device_version_matches_installed_manifest() -> None:
