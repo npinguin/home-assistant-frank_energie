@@ -1722,7 +1722,6 @@ def _get_price_resolution_attributes(data: dict) -> dict:
     }
 
 
-
 def _get_user_meter_types_by_segment(data: dict) -> dict[str, str]:
     """Keep electricity and gas meter types visible without new entity IDs."""
     user = data.get(DATA_USER)
