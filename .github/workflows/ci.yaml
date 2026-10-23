@@ -85,6 +85,15 @@ jobs:
           manifest = json.loads(pathlib.Path('custom_components/frank_energie/manifest.json').read_text())
           metadata = tomllib.loads(pathlib.Path('pyproject.toml').read_text())
           assert manifest['version'] == metadata['tool']['poetry']['version']
+          import ast
+          const_ast = ast.parse(pathlib.Path('custom_components/frank_energie/const.py').read_text())
+          version_nodes = [
+              node for node in const_ast.body
+              if isinstance(node, ast.AnnAssign)
+              and isinstance(node.target, ast.Name) and node.target.id == 'VERSION'
+          ]
+          assert len(version_nodes) == 1
+          assert ast.literal_eval(version_nodes[0].value) == manifest['version']
           assert manifest['requirements'] == ['python-frank-energie==2026.9.20']
           print('PASS consistent release identity and pinned Python client')
           PY
