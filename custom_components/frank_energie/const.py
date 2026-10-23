@@ -5,8 +5,10 @@ Constants used in the Frank Energie integration.
 # const.py
 # date 2026.9.20
 
+import json
 import logging
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Final
 
 from homeassistant.const import CURRENCY_EURO, UnitOfEnergy, UnitOfVolume
@@ -33,7 +35,11 @@ _LOGGER: logging.Logger = logging.getLogger(__name__)
 
 # --- Domain Information ---
 DOMAIN: Final[str] = "frank_energie"
-VERSION: Final[str] = "2026.9.20"
+# Read the packaged manifest rather than duplicating the release identifier.
+# Service device metadata and HACS install version therefore cannot drift.
+VERSION: Final[str] = json.loads(
+    Path(__file__).with_name("manifest.json").read_text(encoding="utf-8")
+)["version"]
 ATTRIBUTION: Final[str] = "Data provided by Frank Energie"
 UNIQUE_ID: Final[str] = "frank_energie"
 TIMEZONE_AMSTERDAM: Final[str] = "Europe/Amsterdam"
