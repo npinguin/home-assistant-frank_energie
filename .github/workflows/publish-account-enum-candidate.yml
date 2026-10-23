@@ -14,8 +14,10 @@ permissions:
   actions: read
 
 concurrency:
-  group: frank-energie-account-enum-candidate
-  cancel-in-progress: true
+  # Each commit is independent; stale heads are rejected immediately
+  # before tag creation, so an older pending run cannot block a newer one.
+  group: frank-energie-account-enum-candidate-${{ github.sha }}
+  cancel-in-progress: false
 
 jobs:
   publish:
