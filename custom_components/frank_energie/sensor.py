@@ -1736,7 +1736,7 @@ SENSOR_TYPES: tuple[FrankEnergieEntityDescription, ...] = (
             data[DATA_CONTRACT_PRICE_RESOLUTION_STATE].active_option.lower()
             if data.get(DATA_CONTRACT_PRICE_RESOLUTION_STATE)
             and data[DATA_CONTRACT_PRICE_RESOLUTION_STATE].active_option
-            else STATE_UNKNOWN
+            else None
         ),
         available_fn=lambda data: (
             data.get(DATA_CONTRACT_PRICE_RESOLUTION_STATE) is not None
@@ -4312,14 +4312,46 @@ class FrankEnergieSensor(
     # _attr_device_class = SensorDeviceClass.MONETARY
     # _attr_state_class = SensorStateClass.MEASUREMENT
 
+    def _validated_enum_state(self, value: StateType) -> StateType:
+        """Keep invalid or missing API enum values out of HA sensor states.
+
+        Home Assistant raises ValueError during entity registration if a
+        SensorDeviceClass.ENUM returns a value absent from its options.
+        Do not turn an unknown contract value into a fabricated option.
+        """
+        if self.entity_description.device_class != SensorDeviceClass.ENUM:
+            return value
+
+        options = self.entity_description.options or ()
+        normalized = value.strip().lower() if isinstance(value, str) else None
+        if normalized in options:
+            self._last_invalid_enum_value = None
+            return normalized
+
+        # Null/UNKNOWN/UNAVAILABLE represent missing data, not enum members.
+        # Unexpected real API values are logged once per sensor/value so a
+        # new contract type can be mapped deliberately without log flooding.
+        if normalized and normalized not in (STATE_UNKNOWN, STATE_UNAVAILABLE):
+            if value != self._last_invalid_enum_value:
+                _LOGGER.warning(
+                    "Frank Energie enum sensor %s received unsupported value %r; "
+                    "allowed options: %s. Marking unavailable.",
+                    self.entity_description.key,
+                    value,
+                    options,
+                )
+                self._last_invalid_enum_value = value
+        return None
+
     @property
     def native_value(self) -> StateType:
-        """Return the state of the sensor."""
+        """Return a Home Assistant-valid state from the latest API data."""
         if self.coordinator.data is None:
             return None
         try:
-            return self.entity_description.value_fn(self.coordinator.data)
-        except (TypeError, IndexError, ValueError, AttributeError):
+            value = self.entity_description.value_fn(self.coordinator.data)
+            return self._validated_enum_state(value)
+        except (TypeError, IndexError, ValueError, AttributeError, KeyError):
             return None
 
     @property
@@ -4391,6 +4423,7 @@ class FrankEnergieSensor(
     ) -> None:
         """Initialize the sensor."""
         self.entity_description: FrankEnergieEntityDescription = description
+        self._last_invalid_enum_value: object | None = None
         if hasattr(self.entity_description, "state_class"):
             self._attr_state_class = getattr(
                 self.entity_description, "state_class", None
@@ -4453,7 +4486,9 @@ class FrankEnergieSensor(
         """Get the latest data and updates the states."""
         data = self.coordinator.data
         try:
-            self._attr_native_value = self.entity_description.value_fn(data)
+            self._attr_native_value = self._validated_enum_state(
+                self.entity_description.value_fn(data)
+            )
         except (IndexError, ValueError):
             self._attr_native_value = None
         except (AttributeError, TypeError, KeyError):
