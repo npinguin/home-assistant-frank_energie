@@ -1524,3 +1524,25 @@ def test_service_device_version_matches_installed_manifest() -> None:
     )
     device = service_device_info("entry_1", SERVICE_NAME_PRICES)
     assert manifest["version"] == VERSION == device["sw_version"]
+
+
+@pytest.mark.parametrize(
+    ("connections", "expected_primary", "expected_types"),
+    [
+        ([], None, {}),
+        ([{"segment": "ELECTRICITY", "meterType": None}], None, {}),
+        ([{"segment": "GAS", "meterType": "SMR1"}], "smr1", {"gas": "smr1"}),
+    ],
+)
+def test_meter_type_handles_empty_and_gas_only_connections(
+    connections: list[dict], expected_primary: str | None, expected_types: dict
+) -> None:
+    """Absent and single-segment account data must not invent meter values."""
+    from types import SimpleNamespace
+
+    from custom_components.frank_energie.sensor import SENSOR_TYPES
+
+    description = next(d for d in SENSOR_TYPES if d.key == "meterType")
+    data = {const.DATA_USER: SimpleNamespace(connections=connections)}
+    assert description.value_fn(data) == expected_primary
+    assert description.attr_fn(data)["meter_types_by_segment"] == expected_types
