@@ -1722,6 +1722,31 @@ def _get_price_resolution_attributes(data: dict) -> dict:
     }
 
 
+
+def _get_user_meter_types_by_segment(data: dict) -> dict[str, str]:
+    """Keep electricity and gas meter types visible without new entity IDs."""
+    user = data.get(DATA_USER)
+    connections = getattr(user, "connections", None) or []
+    types: dict[str, str] = {}
+    for index, connection in enumerate(connections, start=1):
+        if not isinstance(connection, dict):
+            continue
+        raw_type = connection.get("meterType")
+        if not isinstance(raw_type, str) or not raw_type.strip():
+            continue
+        segment = connection.get("segment")
+        if not isinstance(segment, str) or not segment.strip():
+            segment = f"connection_{index}"
+        types[segment.strip().lower()] = raw_type.strip().lower()
+    return types
+
+
+def _get_primary_user_meter_type(data: dict) -> str | None:
+    """Keep the original meter sensor, prioritizing electricity if present."""
+    types = _get_user_meter_types_by_segment(data)
+    return types.get("electricity") or next(iter(types.values()), None)
+
+
 SENSOR_TYPES: tuple[FrankEnergieEntityDescription, ...] = (
     FrankEnergieEntityDescription(
         key="contract_price_resolution_state",
@@ -3743,7 +3768,7 @@ SENSOR_TYPES: tuple[FrankEnergieEntityDescription, ...] = (
         key="propositionType",
         translation_key="proposition_type",
         device_class=SensorDeviceClass.ENUM,
-        options=["dynamic"],
+        options=["dynamic", "model"],
         icon="mdi:file-document-check",
         authenticated=True,
         service_name=SERVICE_NAME_USER,
@@ -3941,22 +3966,14 @@ SENSOR_TYPES: tuple[FrankEnergieEntityDescription, ...] = (
         key="meterType",
         translation_key="meter_type",
         device_class=SensorDeviceClass.ENUM,
-        options=["slm"],
+        options=["slm", "smr1", "smr3"],
         icon="mdi:meter-electric",
         authenticated=True,
         service_name=SERVICE_NAME_USER,
-        value_fn=lambda data: (
-            next(
-                (
-                    connection["meterType"].lower()
-                    for connection in data[DATA_USER].connections
-                    if connection.get("meterType")
-                ),
-                None,
-            )
-            if data[DATA_USER] and data[DATA_USER].connections
-            else None
-        ),
+        value_fn=_get_primary_user_meter_type,
+        attr_fn=lambda data: {
+            "meter_types_by_segment": _get_user_meter_types_by_segment(data)
+        },
     ),
     FrankEnergieEntityDescription(
         key="contractStartDate",
