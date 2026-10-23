@@ -1507,3 +1507,25 @@ def test_account_enum_options_match_shipped_translations() -> None:
             payload = json.loads(translation.read_text(encoding="utf-8"))
             states = payload["entity"]["sensor"][description.translation_key]["state"]
             assert set(states) == set(description.options), translation
+
+
+
+def test_service_device_version_matches_installed_manifest() -> None:
+    """Service device software version must never drift from HACS manifest."""
+    import json
+    from pathlib import Path
+
+    from custom_components.frank_energie.const import (
+        SERVICE_NAME_PRICES,
+        VERSION,
+    )
+    from custom_components.frank_energie.helpers import service_device_info
+
+    manifest = json.loads(
+        Path(__file__)
+        .parents[1]
+        .joinpath("custom_components/frank_energie/manifest.json")
+        .read_text(encoding="utf-8")
+    )
+    device = service_device_info("entry_1", SERVICE_NAME_PRICES)
+    assert manifest["version"] == VERSION == device["sw_version"]
