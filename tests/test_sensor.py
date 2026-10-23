@@ -1364,3 +1364,100 @@ async def test_battery_strategy_sensor_passes_ha_enum_validation(
     validation accepts."""
     state = await _battery_strategy_sensor_state(hass, strategy)
     assert state == strategy.value.lower()
+
+
+# Regression: authenticated account enum data can be null, "unknown", or an
+# API value not declared in the integration's options. Home Assistant must
+# never raise "not in the list of options provided" while registering these.
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("sensor_key", "api_value", "expected"),
+    [
+        ("contract_price_resolution_state", "PT15M", "pt15m"),
+        ("contract_price_resolution_state", "PT60M", "pt60m"),
+        ("contract_price_resolution_state", None, "unavailable"),
+        ("contract_price_resolution_state", "unknown", "unavailable"),
+        ("contract_price_resolution_state", "UNKNOWN", "unavailable"),
+        ("contract_price_resolution_state", "PT30M", "unavailable"),
+        ("propositionType", "DYNAMIC", "dynamic"),
+        ("propositionType", None, "unavailable"),
+        ("propositionType", "unknown", "unavailable"),
+        ("propositionType", "MODEL", "unavailable"),
+        ("meterType", "SLM", "slm"),
+        ("meterType", None, "unavailable"),
+        ("meterType", "unknown", "unavailable"),
+        ("meterType", "SMR3", "unavailable"),
+    ],
+)
+async def test_account_enum_sensors_pass_real_ha_validation(
+    hass: HomeAssistant, sensor_key: str, api_value: str | None, expected: str
+) -> None:
+    """Missing/unsupported contract values do not block HA entity creation."""
+    from types import SimpleNamespace
+    from unittest.mock import MagicMock
+
+    from custom_components.frank_energie.sensor import (
+        FrankEnergieSensor,
+        SENSOR_TYPES,
+    )
+
+    description = next(d for d in SENSOR_TYPES if d.key == sensor_key)
+    if sensor_key == "contract_price_resolution_state":
+        data = {
+            const.DATA_CONTRACT_PRICE_RESOLUTION_STATE: SimpleNamespace(
+                active_option=api_value,
+                available_options=None,
+                upcoming_change=None,
+                change_request_effective_date=None,
+                is_change_request_possible=False,
+                upcoming_change_effective_date=None,
+            )
+        }
+    elif sensor_key == "propositionType":
+        data = {
+            const.DATA_USER_SITES: SimpleNamespace(propositionType=api_value)
+        }
+    else:
+        data = {
+            const.DATA_USER: SimpleNamespace(
+                connections=[{"meterType": api_value}]
+            )
+        }
+
+    coordinator = MagicMock()
+    coordinator.data = data
+    coordinator.last_update_success = True
+
+    state = await _register_sensor_and_get_state(
+        hass,
+        lambda entry: FrankEnergieSensor(coordinator, description, entry),
+    )
+    assert state == expected
+
+
+@pytest.mark.asyncio
+async def test_account_enum_guard_preserves_valid_unknown_option(
+    hass: HomeAssistant,
+) -> None:
+    """An enum explicitly declaring 'unknown' is not forcibly hidden."""
+    from unittest.mock import MagicMock
+
+    from custom_components.frank_energie.sensor import (
+        FrankEnergieEntityDescription,
+        FrankEnergieSensor,
+    )
+    from homeassistant.components.sensor import SensorDeviceClass
+
+    coordinator = MagicMock()
+    coordinator.data = {"test_enum": "UNKNOWN"}
+    coordinator.last_update_success = True
+    desc = FrankEnergieEntityDescription(
+        key="test_allowed_unknown",
+        device_class=SensorDeviceClass.ENUM,
+        options=["unknown", "valid"],
+        value_fn=lambda data: data["test_enum"],
+    )
+    state = await _register_sensor_and_get_state(
+        hass, lambda entry: FrankEnergieSensor(coordinator, desc, entry)
+    )
+    assert state == "unknown"
