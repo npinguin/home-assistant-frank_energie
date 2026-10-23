@@ -33,7 +33,9 @@ _LOGGER: logging.Logger = logging.getLogger(__name__)
 
 # --- Domain Information ---
 DOMAIN: Final[str] = "frank_energie"
-VERSION: Final[str] = "2026.9.20"
+# Generated release identity. Tests and CI enforce parity with manifest.json.
+# Do not read the manifest from the HA event loop during module import.
+VERSION: Final[str] = "2026.10.23.1"
 ATTRIBUTION: Final[str] = "Data provided by Frank Energie"
 UNIQUE_ID: Final[str] = "frank_energie"
 TIMEZONE_AMSTERDAM: Final[str] = "Europe/Amsterdam"
