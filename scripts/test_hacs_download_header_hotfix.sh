@@ -36,7 +36,9 @@ if sh "$PATCHER" rollback; then
     echo "FAIL: unsafe rollback was not blocked" >&2
     exit 1
 fi
-cmp "$WORK/patched.py" "$WORK/patched.py"
+cp "$HACS_BASE_FILE" "$WORK/changed.py"
+# A refused rollback must not modify the user's updated HACS source.
+cmp "$WORK/changed.py" "$HACS_BASE_FILE"
 cp "$WORK/patched.py" "$HACS_BASE_FILE"
 sh "$PATCHER" rollback
 cmp "$WORK/original.py" "$HACS_BASE_FILE"
