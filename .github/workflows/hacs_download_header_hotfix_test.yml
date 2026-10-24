@@ -1,0 +1,33 @@
+name: HACS Download Header Hotfix Selftest
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "scripts/hacs_download_header_hotfix.sh"
+      - "scripts/test_hacs_download_header_hotfix.sh"
+      - ".github/workflows/hacs_download_header_hotfix_test.yml"
+  pull_request:
+    paths:
+      - "scripts/hacs_download_header_hotfix.sh"
+      - "scripts/test_hacs_download_header_hotfix.sh"
+      - ".github/workflows/hacs_download_header_hotfix_test.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  hotfix-selftest:
+    name: Apply, idempotency, rollback and safety
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout tested commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - name: Shell syntax
+        run: |
+          sh -n scripts/hacs_download_header_hotfix.sh
+          sh -n scripts/test_hacs_download_header_hotfix.sh
+      - name: Run isolated hotfix regression test
+        run: sh scripts/test_hacs_download_header_hotfix.sh
