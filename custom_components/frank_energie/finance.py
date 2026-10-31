@@ -96,7 +96,11 @@ def finance_reading(
     if metric.startswith("gas_") and bool(getattr(insights, "gasExcluded", False)):
         return None, "gas_excluded"
 
-    block = insights if difference_name is None else getattr(insights, difference_name, None)
+    block = (
+        insights
+        if difference_name is None
+        else getattr(insights, difference_name, None)
+    )
     if block is None:
         return None, "missing_segment"
 
