@@ -530,3 +530,39 @@ def test_price_coverage_counts_effective_prices_after_merge_not_raw_input() -> N
     assert coverage["electricity"]["has_price_points"] is True
     assert coverage["gas"]["price_points"] == 0
     assert coverage["gas"]["has_price_points"] is False
+
+
+def test_price_coverage_splits_actual_selected_slots_by_local_day() -> None:
+    """A 30-slot stream can conceal 24 today plus only 6 tomorrow."""
+    gas = SimpleNamespace(
+        all=[
+            SimpleNamespace(date_from=datetime.fromisoformat("2026-10-31T12:00:00+01:00"))
+            for _ in range(24)
+        ]
+        + [
+            SimpleNamespace(date_from=datetime.fromisoformat("2026-11-01T12:00:00+01:00"))
+            for _ in range(6)
+        ],
+        prices=[],
+        resolution_minutes=60,
+    )
+    coverage = _safe_price_coverage({"gas": gas})
+    assert coverage["gas"]["price_points"] == 30
+    assert coverage["gas"]["slots_by_local_day"] == {
+        "2026-10-31": 24,
+        "2026-11-01": 6,
+    }
+
+
+def test_unparseable_price_date_does_not_leak_or_break_diagnostics() -> None:
+    source = SimpleNamespace(
+        all=[
+            SimpleNamespace(date_from="private-customer"),
+            SimpleNamespace(date_from=datetime(2026, 10, 31, 12, 0)),
+        ],
+        prices=[],
+        resolution_minutes=60,
+    )
+    result = _safe_price_coverage({"electricity": source})
+    assert result["electricity"]["slots_by_local_day"] == {}
+    assert "private-customer" not in str(result)
