@@ -250,6 +250,38 @@ def _price_counts(market_prices: MarketPrices | None) -> tuple[int, int]:
     )
 
 
+def _price_selection_outcome(
+    selected: MarketPrices | None,
+    *,
+    authenticated: bool,
+    customer_electricity: bool = False,
+    customer_gas: bool = False,
+    fallback_from_cache: bool = False,
+) -> str:
+    """Classify selected slots, not merely successful API requests.
+
+    Missing customer slots do not prove a public fallback: fallback must
+    provide actual data. A cache-only response is not a fresh market feed.
+    This affects diagnostic provenance, not selected price values.
+    """
+    electricity_slots, gas_slots = _price_counts(selected)
+    if not electricity_slots and not gas_slots:
+        return "not_available"
+    if not authenticated:
+        return "cached_fallback" if fallback_from_cache else "public"
+    has_customer = (customer_electricity and electricity_slots > 0) or (
+        customer_gas and gas_slots > 0
+    )
+    has_fallback = (not customer_electricity and electricity_slots > 0) or (
+        not customer_gas and gas_slots > 0
+    )
+    if has_customer and has_fallback:
+        return "mixed"
+    if has_fallback:
+        return "cached_fallback" if fallback_from_cache else "public_fallback"
+    return "customer"
+
+
 def _resolution_state_to_dict(state: ContractPriceResolutionState) -> dict[str, Any]:
     """Convert ContractPriceResolutionState to serializable dict."""
     return {
