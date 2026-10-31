@@ -82,6 +82,57 @@ delta is proven against the full file tree.
    test/stable assets as appropriate, and update `main` only after gates.
    Document rollback, limitations and what was deliberately excluded.
 
+## Live BE diagnostics observed from installed 2026.10.31.2
+
+Private HA 2026.10.4 diagnostics confirm **both** independent public
+`marketPrices` and authenticated `customerMarketPrices` endpoints return
+parseable source slots for current and next day. Today's customer source has
+24 electricity and 24 gas records; tomorrow has 24 electricity and **6**
+gas records. This is not automatically full next-day gas coverage: the
+actual timestamp intervals and publication timing still need to be checked.
+The selected effective streams carry 48 electricity and 30 gas records at
+reported 60-minute resolution despite the independent public query
+requesting 15-minute resolution.
+
+The same export proves two implementation issues, fixed on this single
+release PR with synthetic regression tests:
+
+- **Wrong price-coordinator segment flags:** prices exist but
+  `user_electricity_enabled` and `user_gas_enabled` are False because
+  only the settings coordinator fetches UserSites. Price fallback now
+  derives the flags from **the selected delivery site**, without
+  cross-site inference.
+- **Empty contract metadata:** the pinned client supplies
+  `Connection` dataclasses, but the diagnostics extractor previously
+  accepted only dictionaries. BE MODEL meter/contract metadata is now
+  extracted from both representations while excluding identifiers.
+
+Diagnostics now also exposes `has_active_today_prices` separately from
+the legacy `has_cached_today` field, and effective
+`price_coverage.*.slots_by_local_day` (bounded counts, not prices). A
+successful API response or 6 slots does not establish full day coverage.
+
+`MonthSummary`, `Invoices` and yesterday `PeriodUsageAndCosts` have
+source response objects. `MonthInsights` is not called because monthly
+finance remains opt-in disabled, **not because the endpoint was proven
+unavailable**. One nonfatal `SmartHvacStatus` exception is observed;
+no source evidence yet establishes its cause or that the user has an HVAC
+product configured.
+
+### Required next acceptance
+
+- [ ] New diagnostics after the consolidated code is installed: selected
+      site flags correct, electricity/gas MODEL contract segments populated,
+      no private identifiers or monetary values in export.
+- [ ] Verify timestamp coverage of customer gas prices for tomorrow, not
+      only slot count. Confirm fallback provenance when one source fails.
+- [ ] Confirm actual `has_active_today_prices`, daily counts and
+      60-minute selected customer resolution on BE account.
+- [ ] Only after explicit enablement and source-contract fix #11, inspect
+      `MonthInsights` against real current/previous months and invoices.
+- [ ] Confirm SmartHvacStatus is an optional unsupported endpoint or an
+      actionable integration defect; do not infer from one exception.
+
 ## Working rule
 
 **One active branch + one active release PR + separate GitHub issues.**
