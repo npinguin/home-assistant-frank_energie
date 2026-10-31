@@ -273,13 +273,21 @@ async def async_get_config_entry_diagnostics(
         "entry": {
             "entry_id": entry.entry_id,
             "title": entry.title,
-            "options": dict(entry.options),
-            "data": dict(entry.data),
+            # Do not echo option/data blobs: third-party extensions may add
+            # fields not covered by name-based redaction. Only safe flags.
+            "options": {
+                "monthly_finance_enabled": bool(
+                    entry.options.get("monthly_finance_enabled", False)
+                ),
+            },
+            "data": {
+                "configured": bool(entry.data),
+                "site_selected": bool(entry.data.get("site_reference")),
+            },
         },
         "coordinator": {
             "last_update_success": coordinator.last_update_success,
             "update_interval": str(coordinator.update_interval),
-            "site_reference": coordinator.site_reference,
             "country_code": coordinator.country_code,
             "user_country": getattr(coordinator, "_user_country", None),
             "resolution": coordinator.resolution,
@@ -297,10 +305,18 @@ async def async_get_config_entry_diagnostics(
                 False,
             ),
         },
-        "data": _serialize(coordinator.data),
-        "cached_prices": _serialize(coordinator.cached_prices),
+        # The original diagnostics dumped complete provider account objects.
+        # That leaks billing, connection, referral and other nested personal
+        # data despite key-based redaction. Keep only bounded evidence.
+        "raw_provider_payloads": "omitted_for_privacy",
+        "cached_prices_present": coordinator.cached_prices is not None,
         "battery_session_coordinators": len(
             runtime_data.battery_session_coordinators,
+        ),
+        "graphql_request_evidence": (
+            trace.snapshot()
+            if (trace := getattr(coordinator, "_diagnostic_trace", None)) is not None
+            else {"configured": False}
         ),
         # Explicit cross-coordinator evidence: a healthy price coordinator
         # cannot be used to infer invoice, metering or monthly-finance health.
