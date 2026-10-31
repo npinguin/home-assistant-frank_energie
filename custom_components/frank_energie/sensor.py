@@ -5081,8 +5081,7 @@ def _monthly_finance_descriptions() -> tuple[FrankEnergieEntityDescription, ...]
                     # Windowed summaries reset and may be revised; not
                     # TOTAL_INCREASING, no Recorder long-term statistic.
                     suggested_display_precision=2,
-                    entity_registry_enabled_default=metric
-                    not in ("gas_kwh", "gas_m3"),
+                    entity_registry_enabled_default=metric not in ("gas_kwh", "gas_m3"),
                     value_fn=lambda data, k=data_key, m=metric: finance_reading(
                         data.get(k), m
                     )[0],
@@ -5266,9 +5265,8 @@ async def async_setup_entry(
         )
     ]
 
-    if (
-        settings_coordinator.api.is_authenticated
-        and config_entry.options.get(CONF_MONTHLY_FINANCE_ENABLED, False)
+    if settings_coordinator.api.is_authenticated and config_entry.options.get(
+        CONF_MONTHLY_FINANCE_ENABLED, False
     ):
         for description in _monthly_finance_descriptions():
             if description.is_gas and "GAS" not in user_segments:
