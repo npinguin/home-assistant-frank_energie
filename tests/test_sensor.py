@@ -1661,3 +1661,98 @@ async def test_gas_sensor_registration_follows_selected_site_not_first_site(
     assert ("gas_markup" in gas_price_keys) is expect_gas
     assert ("gas_tomorrow_avg" in gas_price_keys) is expect_gas
     assert (gas_usage_keys == {"costs_gas_yesterday", "usage_gas_yesterday"}) is expect_gas
+
+def test_real_be_graphql_models_reach_gas_forecast_and_usage_sensors(freezer) -> None:
+    """Cross actual pinned GraphQL parsers, typed coordinators, sensor and device."""
+    from datetime import UTC
+    from unittest.mock import MagicMock
+    from zoneinfo import ZoneInfo
+
+    from python_frank_energie.models import MarketPrices, PeriodUsageAndCosts
+    from custom_components.frank_energie.const import DATA_GAS, DATA_USAGE
+    from custom_components.frank_energie.sensor import (
+        FrankEnergieSensor,
+        SENSOR_TYPES,
+    )
+
+    freezer.move_to(datetime(2026, 7, 20, 13, 0, tzinfo=UTC))
+    first = datetime(2026, 7, 21, tzinfo=ZoneInfo("Europe/Brussels"))
+    gas_rows = [
+        {
+            "from": (first + timedelta(hours=i)).astimezone(UTC).isoformat(),
+            "till": (first + timedelta(hours=i + 1)).astimezone(UTC).isoformat(),
+            "marketPrice": 0.1,
+            "marketPriceTax": 0.02,
+            "sourcingMarkupPrice": 0.01,
+            "energyTaxPrice": 0.1,
+        }
+        for i in range(6)
+    ]
+
+    price_source = MarketPrices.from_userprices_dict(
+        {
+            "data": {
+                "customerMarketPrices": {
+                    "electricityPrices": [],
+                    "gasPrices": gas_rows,
+                }
+            }
+        },
+        "BE",
+    )
+    usage_source = PeriodUsageAndCosts.from_dict(
+        {
+            "data": {
+                "periodUsageAndCosts": {
+                    "_id": "synthetic",
+                    "gas": {
+                        "usageTotal": 12.5,
+                        "costsTotal": 4.75,
+                        "unit": "M3",
+                        "items": [],
+                    },
+                    "electricity": None,
+                    "feedIn": None,
+                }
+            }
+        }
+    )
+
+    price_coordinator = MagicMock()
+    price_coordinator.data = {DATA_GAS: price_source.gas}
+    price_coordinator.last_update_success = True
+    statistics_coordinator = MagicMock()
+    statistics_coordinator.data = {DATA_USAGE: usage_source}
+    statistics_coordinator.last_update_success = True
+    entry = MagicMock()
+    entry.entry_id = "synthetic-gas"
+    entry.unique_id = "synthetic-gas"
+
+    def entity(key, coordinator):
+        description = next(d for d in SENSOR_TYPES if d.key == key)
+        return FrankEnergieSensor(coordinator, description, entry)
+
+    forecast = entity("gas_tomorrow_avg", price_coordinator)
+    assert forecast.native_value is not None
+    assert forecast.device_info["model"] == "Gasprices"
+    assert len(forecast.extra_state_attributes["tomorrow_prices"]) == 6
+
+    gas_usage = entity("usage_gas_yesterday", statistics_coordinator)
+    gas_costs = entity("costs_gas_yesterday", statistics_coordinator)
+    assert gas_usage.native_value == 12.5
+    assert gas_costs.native_value == 4.75
+    assert gas_usage.device_info["model"] == "Usage"
+    assert gas_costs.device_info["model"] == "Usage"
+
+    statistics_coordinator.data[DATA_USAGE] = PeriodUsageAndCosts.from_dict(
+        {
+            "data": {
+                "periodUsageAndCosts": {
+                    "_id": "synthetic-empty",
+                    "gas": None,
+                }
+            }
+        }
+    )
+    assert gas_usage.native_value is None
+    assert gas_costs.native_value is None
