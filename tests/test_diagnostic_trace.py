@@ -13,6 +13,34 @@ from custom_components.frank_energie.diagnostic_trace import (
 )
 
 
+def test_month_insights_raw_null_zero_distinction_without_finance_values() -> None:
+    """Source null-vs-zero evidence survives before upstream parser coercion."""
+    response = {
+        "data": {
+            "monthInsights": {
+                "expectedCosts": None,
+                "expectedCostsGas": 0,
+                "expectedCostsElectricity": 481516.234,
+                "gasDifference": {"actualUsage": None, "actualCosts": 0},
+                "electricityDifference": {"actualUsage": 9.8},
+                "lastMeterReadingDate": None,
+            }
+        }
+    }
+    result = _response_metadata(response)
+    states = result["month_insights_source_states"]
+    assert states["expectedCosts"] == "null"
+    assert states["expectedCostsGas"] == "zero"
+    assert states["expectedCostsElectricity"] == "positive"
+    assert states["expectedCostsFeedIn"] == "missing"
+    assert states["gasDifference.actualUsage"] == "null"
+    assert states["gasDifference.actualCosts"] == "zero"
+    assert states["electricityDifference.expectedUsage"] == "missing"
+    assert states["lastMeterReadingDate"] == "null"
+    assert "481516" not in str(result)
+    assert "9.8" not in str(result)
+
+
 def test_response_metadata_distinguishes_null_empty_and_present_price_arrays() -> None:
     """Observe raw GraphQL data before the provider parser can discard fields."""
     response = {
