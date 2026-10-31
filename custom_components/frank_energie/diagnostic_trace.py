@@ -90,7 +90,6 @@ def _safe_period(value: object) -> str | None:
     return None
 
 
-
 def _finite_numeric_state(container: dict[str, Any], field: str) -> str:
     """Reveal only missing/null/zero/sign, never source numeric amounts."""
     if field not in container:
@@ -126,7 +125,12 @@ def _finance_field_states(root: object) -> dict[str, str]:
     for group in ("gasDifference", "electricityDifference", "feedInDifference"):
         section = root.get(group)
         if isinstance(section, dict):
-            for field in ("actualUsage", "actualCosts", "expectedUsage", "expectedCosts"):
+            for field in (
+                "actualUsage",
+                "actualCosts",
+                "expectedUsage",
+                "expectedCosts",
+            ):
                 states[f"{group}.{field}"] = _finite_numeric_state(section, field)
         else:
             states[group] = "null" if group in root else "missing"
