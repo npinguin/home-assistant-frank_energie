@@ -112,6 +112,23 @@ async def test_observer_captures_graphql_errors_and_reraises_network_failure() -
     assert "private-token" not in str(trace.snapshot())
 
 
+def test_price_observer_never_breaks_incomplete_provider_return_objects() -> None:
+    """Telemetry must accept partial, unexpected, or sentinel-like API values."""
+    from unittest.mock import sentinel
+
+    from custom_components.frank_energie.coordinator import _price_counts
+
+    assert _price_counts(None) == (0, 0)
+    assert _price_counts(sentinel.unparsed_api_response) == (0, 0)
+    assert _price_counts(SimpleNamespace(electricity=None, gas=None)) == (0, 0)
+    assert _price_counts(
+        SimpleNamespace(
+            electricity=SimpleNamespace(all=[object(), object()]),
+            gas=SimpleNamespace(all=[]),
+        )
+    ) == (2, 0)
+
+
 def test_graphql_trace_stays_bounded_and_rejects_untrusted_operation_names() -> None:
     """Recent history is capped; operation metadata cannot be arbitrary text."""
     trace = DiagnosticTrace()
