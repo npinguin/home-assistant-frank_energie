@@ -717,6 +717,58 @@ class FrankEnergieCoordinator(DataUpdateCoordinator[FrankEnergieData]):
             for price in prices
         )
 
+    @staticmethod
+    def _covers_local_day(prices: PriceData | None, day: date) -> bool:
+        """Check actual, gap-free timestamp coverage, including 23/25-hour DST days."""
+        if prices is None or not prices.all:
+            return False
+
+        tz = ZoneInfo(TIMEZONE_AMSTERDAM)
+        utc = ZoneInfo("UTC")
+        start = datetime.combine(day, time.min, tzinfo=tz).astimezone(utc)
+        end = datetime.combine(
+            day + timedelta(days=1), time.min, tzinfo=tz
+        ).astimezone(utc)
+        intervals: list[tuple[datetime, datetime]] = []
+        for price in prices.all:
+            first = getattr(price, "date_from", None)
+            last = getattr(price, "date_till", None)
+            if (
+                not isinstance(first, datetime)
+                or not isinstance(last, datetime)
+                or first.tzinfo is None
+                or last.tzinfo is None
+            ):
+                continue
+            first_utc, last_utc = first.astimezone(utc), last.astimezone(utc)
+            if first_utc < end and last_utc > start:
+                intervals.append((max(first_utc, start), min(last_utc, end)))
+
+        cursor = start
+        for first, last in sorted(intervals):
+            if first > cursor:
+                return False
+            if last > cursor:
+                cursor = last
+            if cursor >= end:
+                return True
+        return False
+
+    def _tomorrow_cache_covers_selected_site(
+        self, cached: MarketPrices, tomorrow: date
+    ) -> bool:
+        """Do not mistake six gas hours for a complete subscribed gas day."""
+        required = (
+            (self.user_electricity_enabled, cached.electricity),
+            (self.user_gas_enabled, cached.gas),
+        )
+        # Anonymous accounts do not have site subscription flags. Preserve
+        # their existing date-based cache policy.
+        return all(
+            not enabled or self._covers_local_day(series, tomorrow)
+            for enabled, series in required
+        )
+
     async def _refresh_tomorrow_cache(
         self,
         today: date,
@@ -761,24 +813,31 @@ class FrankEnergieCoordinator(DataUpdateCoordinator[FrankEnergieData]):
             and _amsterdam_date(self.last_fetch_tomorrow) == today
         ):
             if self._tomorrow_cache_matches_date(self.cached_prices_tomorrow, tomorrow):
+                if self._tomorrow_cache_covers_selected_site(
+                    self.cached_prices_tomorrow, tomorrow
+                ):
+                    _LOGGER.debug(
+                        "Tomorrow prices already cached (fetched %s), skipping API call",
+                        self.last_fetch_tomorrow,
+                    )
+                    return self.cached_prices_tomorrow
                 _LOGGER.debug(
-                    "Tomorrow prices already cached (fetched %s), skipping API call",
-                    self.last_fetch_tomorrow,
+                    "Tomorrow cache covers only part of the selected site; "
+                    "retrying without discarding available prices"
                 )
-                return self.cached_prices_tomorrow
-
-            # A live fetch now validates itself before caching (see the
-            # freshly-fetched check below), so reaching this branch means the
-            # bad data came from disk — e.g. state persisted by an older
-            # build. Kept at warning: that's a genuine anomaly, not routine.
-            _LOGGER.warning(
-                "Cached tomorrow prices claim to be fetched today but are not "
-                "actually dated for %s — discarding stale/incorrect cache and "
-                "fetching fresh data",
-                tomorrow,
-            )
-            self.cached_prices_tomorrow = None
-            self.last_fetch_tomorrow = None
+            else:
+                # A live fetch now validates itself before caching (see the
+                # freshly-fetched check below), so reaching this branch means the
+                # bad data came from disk — e.g. state persisted by an older
+                # build. Kept at warning: that's a genuine anomaly, not routine.
+                _LOGGER.warning(
+                    "Cached tomorrow prices claim to be fetched today but are not "
+                    "actually dated for %s — discarding stale/incorrect cache and "
+                    "fetching fresh data",
+                    tomorrow,
+                )
+                self.cached_prices_tomorrow = None
+                self.last_fetch_tomorrow = None
 
         _LOGGER.debug(
             "Tomorrow cache status: cached=%s last_fetch=%s",
@@ -2811,10 +2870,13 @@ class FrankEnergiePriceCoordinator(FrankEnergieCoordinator):
             and _amsterdam_date(self.last_fetch_tomorrow) == today
         ):
             tomorrow = today + timedelta(days=1)
-            if self._tomorrow_cache_matches_date(self.cached_prices_tomorrow, tomorrow):
+            if self._tomorrow_cache_matches_date(
+                self.cached_prices_tomorrow, tomorrow
+            ) and self._tomorrow_cache_covers_selected_site(
+                self.cached_prices_tomorrow, tomorrow
+            ):
                 _LOGGER.debug(
-                    "Cached tomorrow prices (fetched today) validated as "
-                    "genuinely dated for %s — cache is fresh",
+                    "Cached tomorrow prices have full required coverage for %s",
                     tomorrow,
                 )
                 return True
@@ -2851,6 +2913,9 @@ class FrankEnergiePriceCoordinator(FrankEnergieCoordinator):
             and self._tomorrow_cache_matches_date(
                 self.cached_prices_tomorrow,
                 tomorrow,
+            )
+            and self._tomorrow_cache_covers_selected_site(
+                self.cached_prices_tomorrow, tomorrow
             )
         )
 
