@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections import Counter
 from dataclasses import fields, is_dataclass
-from datetime import date, datetime, time
+from datetime import date, datetime, time, timedelta
 from decimal import Decimal
 from enum import Enum
 from uuid import UUID
@@ -459,6 +459,185 @@ def _safe_ha_entity_state_summary(
     return summary
 
 
+# These are *existing* stable sensor description keys, never account values.
+# A source GraphQL success cannot prove these entities were registered or
+# received a usable HA state, particularly when a site has gas but the account's
+# first delivery site does not.
+_GAS_ENTITY_GROUPS: dict[str, tuple[str, tuple[str, ...]]] = {
+    "current_prices": (
+        SERVICE_NAME_GAS_PRICES,
+        ("gas_markup", "gas_market", "gas_hourcount"),
+    ),
+    "forecast": (
+        SERVICE_NAME_GAS_PRICES,
+        ("gas_tomorrow_avg", "gas_tomorrow_avg_all_in", "gas_tomorrow_min"),
+    ),
+    "historical_usage": (
+        SERVICE_NAME_USAGE,
+        ("usage_gas_yesterday", "costs_gas_yesterday"),
+    ),
+    "contract": (SERVICE_NAME_USER, ("GascontractStatus",)),
+}
+
+
+def _safe_gas_entity_pipeline(
+    hass: HomeAssistant, entry: ConfigEntry
+) -> dict[str, object]:
+    """Check registration, device grouping and real states without leaking values."""
+    if not isinstance(hass, HomeAssistant):
+        return {"configured": False}
+
+    registry = er.async_get(hass)
+    devices = dr.async_get(hass)
+    source_entries = tuple(
+        entity
+        for entity in registry.entities.values()
+        if entity.config_entry_id == entry.entry_id
+    )
+
+    result: dict[str, object] = {}
+    for group, (expected_model, keys) in _GAS_ENTITY_GROUPS.items():
+        statuses: dict[str, object] = {}
+        for key in keys:
+            matches = [
+                entity
+                for entity in source_entries
+                if isinstance(entity.unique_id, str)
+                and entity.unique_id.endswith(f".{key}")
+            ]
+            if not matches:
+                statuses[key] = {"state": "not_registered"}
+                continue
+            if len(matches) != 1:
+                statuses[key] = {"state": "duplicate_registration"}
+                continue
+
+            entity = matches[0]
+            device = devices.devices.get(entity.device_id)
+            matching_device = (
+                getattr(device, "model", None) == expected_model
+            )
+            if entity.disabled_by is not None:
+                state = "disabled"
+            else:
+                current = hass.states.get(entity.entity_id)
+                if current is None:
+                    state = "not_loaded"
+                elif current.state == STATE_UNAVAILABLE:
+                    state = "unavailable"
+                elif current.state == STATE_UNKNOWN:
+                    state = "unknown"
+                else:
+                    state = "available"
+            statuses[key] = {
+                "state": state,
+                "expected_device_group": expected_model,
+                "correct_device_group": matching_device,
+            }
+        result[group] = statuses
+    return result
+
+
+def _safe_gas_delivery_pipeline(
+    hass: HomeAssistant,
+    entry: ConfigEntry,
+    price_coordinator: object,
+    statistics_coordinator: object,
+) -> dict[str, object]:
+    """Trace gas provider models to selected prices, usage and real HA sensors.
+
+    This does not fetch extra data. No prices, usage amounts, account IDs,
+    addresses or raw provider payloads enter the diagnostic.
+    """
+    local_tz = ZoneInfo("Europe/Brussels")
+    local_today = datetime.now(local_tz).date()
+    tomorrow = local_today + timedelta(days=1)
+    price_data = getattr(price_coordinator, "data", None)
+    gas = price_data.get("gas") if isinstance(price_data, dict) else None
+
+    all_prices = getattr(gas, "all", None) if gas is not None else None
+    slots: Counter[str] = Counter()
+    if isinstance(all_prices, (list, tuple)):
+        for item in all_prices:
+            start = getattr(item, "date_from", None)
+            if isinstance(start, datetime) and start.tzinfo is not None:
+                local_date = start.astimezone(local_tz).date()
+                if local_date in (local_today, tomorrow):
+                    slots[local_date.isoformat()] += 1
+
+    # Reflect the actual PriceData.asdict projection used by tomorrow-price
+    # sensor attributes. Difference vs. parsed slots identifies a lost step.
+    attr_slot_count: int | None = None
+    if gas is not None and callable(getattr(gas, "asdict", None)):
+        try:
+            rendered = gas.asdict(
+                "total", tomorrow_only=True, timezone="Europe/Amsterdam"
+            )
+            if isinstance(rendered, list):
+                attr_slot_count = len(rendered)
+        except (AttributeError, ValueError, KeyError, TypeError):
+            pass
+
+    next_day_complete: bool | None = None
+    if gas is not None and hasattr(price_coordinator, "_covers_local_day"):
+        next_day_complete = bool(
+            price_coordinator._covers_local_day(gas, tomorrow)
+        )
+
+    stats = getattr(statistics_coordinator, "data", None)
+    usage = stats.get("usage") if isinstance(stats, dict) else None
+    gas_usage = getattr(usage, "gas", None) if usage is not None else None
+    unit = getattr(gas_usage, "unit", None)
+    normalized_unit = unit.upper() if isinstance(unit, str) else None
+
+    return {
+        "site_gas_subscription": bool(
+            getattr(price_coordinator, "user_gas_enabled", False)
+        ),
+        "prices": {
+            "parsed_price_slots": (
+                len(all_prices) if isinstance(all_prices, (list, tuple)) else None
+            ),
+            "today_slots": slots[local_today.isoformat()],
+            "tomorrow_slots": slots[tomorrow.isoformat()],
+            "tomorrow_attribute_slots": attr_slot_count,
+            "tomorrow_complete": next_day_complete,
+            "tomorrow_expected_hours": int(
+                (
+                    datetime.combine(
+                        tomorrow + timedelta(days=1), time.min, local_tz
+                    ).astimezone(ZoneInfo("UTC"))
+                    - datetime.combine(
+                        tomorrow, time.min, local_tz
+                    ).astimezone(ZoneInfo("UTC"))
+                ).total_seconds()
+                // 3600
+            ),
+        },
+        "historical_usage": {
+            "period": "previous_day",
+            "api_segment_parsed": gas_usage is not None,
+            "unit": (
+                normalized_unit
+                if normalized_unit in ("KWH", "M3", "M³", "CUBIC_METERS")
+                else "unreported" if normalized_unit is None else "other"
+            ),
+            "usage_total_reported": (
+                getattr(gas_usage, "usage_total", None) is not None
+                if gas_usage is not None
+                else False
+            ),
+            "costs_total_reported": (
+                getattr(gas_usage, "costs_total", None) is not None
+                if gas_usage is not None
+                else False
+            ),
+        },
+        "entities": _safe_gas_entity_pipeline(hass, entry),
+        "recorder_history_verified": False,
+    }
+
+
 async def async_get_config_entry_diagnostics(
     hass: HomeAssistant,
     entry: ConfigEntry,
@@ -536,6 +715,12 @@ async def async_get_config_entry_diagnostics(
                 getattr(runtime_data, "statistics_coordinator", None)
             ),
             "price_coverage": _safe_price_coverage(coordinator.data),
+            "gas_delivery_pipeline": _safe_gas_delivery_pipeline(
+                hass,
+                entry,
+                getattr(runtime_data, "price_coordinator", None),
+                getattr(runtime_data, "statistics_coordinator", None),
+            ),
             "finance_coverage": _safe_finance_coverage(
                 getattr(
                     getattr(runtime_data, "statistics_coordinator", None), "data", None
