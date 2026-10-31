@@ -420,7 +420,15 @@ def _safe_ha_entity_state_summary(
         model = getattr(device, "model", None)
         service = model if model in recognized_services else "Other"
         bucket = by_service.setdefault(
-            service, {"registered": 0, "available": 0, "unavailable": 0, "unknown": 0, "disabled": 0, "not_loaded": 0}
+            service,
+            {
+                "registered": 0,
+                "available": 0,
+                "unavailable": 0,
+                "unknown": 0,
+                "disabled": 0,
+                "not_loaded": 0,
+            },
         )
         bucket["registered"] += 1
         if getattr(entity, "disabled_by", None) is not None:
