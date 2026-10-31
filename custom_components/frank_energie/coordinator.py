@@ -282,6 +282,36 @@ def _price_selection_outcome(
     return "customer"
 
 
+def _site_segment_flags(
+    user_sites: UserSites | None, site_reference: str | None
+) -> tuple[bool, bool]:
+    """Identify the selected site's electricity/gas subscription segments.
+
+    UserSites.segments belongs to the client's first site, so never reuse it
+    for a different selected delivery site. Missing/unmatched metadata must
+    not enable public price fallback for an unrelated site.
+    """
+    if user_sites is None or not site_reference:
+        return False, False
+
+    segments: object = None
+    delivery_sites = getattr(user_sites, "deliverySites", None)
+    if isinstance(delivery_sites, (list, tuple)):
+        for site in delivery_sites:
+            if getattr(site, "reference", None) == site_reference:
+                segments = getattr(site, "segments", None)
+                break
+
+    # The pinned client also exposes first-site fields at UserSites level.
+    if segments is None and getattr(user_sites, "reference", None) == site_reference:
+        segments = getattr(user_sites, "segments", None)
+    if not isinstance(segments, (list, tuple, set, frozenset)):
+        return False, False
+
+    normalized = {item.upper() for item in segments if isinstance(item, str)}
+    return "ELECTRICITY" in normalized, "GAS" in normalized
+
+
 def _resolution_state_to_dict(state: ContractPriceResolutionState) -> dict[str, Any]:
     """Convert ContractPriceResolutionState to serializable dict."""
     return {
@@ -2917,6 +2947,13 @@ class FrankEnergiePriceCoordinator(FrankEnergieCoordinator):
             self._tomorrow_prices_logged = False
 
         user_data = self.settings_coordinator.data.get(DATA_USER)
+        # The settings coordinator fetches UserSites; the price coordinator
+        # does not. Derive flags from that authoritative, selected-site object
+        # instead of retaining the price coordinator's default False values.
+        self.user_electricity_enabled, self.user_gas_enabled = _site_segment_flags(
+            self.settings_coordinator.data.get(DATA_USER_SITES),
+            self.site_reference,
+        )
         if extracted_conn_id := _extract_electricity_connection_id(user_data):
             self._connection_id = extracted_conn_id
 
