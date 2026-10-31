@@ -807,7 +807,7 @@
         "name": "Vehicle Name"
       },
       "costs_electricity_this_month": {
-        "name": "Costs electricity this month"
+        "name": "Legacy electricity monthly alias (unsupported)"
       },
       "elec_lowest_4p": {
         "name": "Lowest average electricity price (4 periods)"
@@ -1077,6 +1077,63 @@
       },
       "battery_last_update": {
         "name": "Last Update"
+      },
+      "finance_current_electricity_costs": {
+        "name": "Electricity costs — current month"
+      },
+      "finance_current_electricity_kwh": {
+        "name": "Electricity usage — current month"
+      },
+      "finance_current_gas_costs": {
+        "name": "Gas costs — current month"
+      },
+      "finance_current_gas_kwh": {
+        "name": "Gas usage in kWh — current month"
+      },
+      "finance_current_gas_m3": {
+        "name": "Gas usage in m³ — current month"
+      },
+      "finance_current_feed_in_costs": {
+        "name": "Feed-in financial balance — current month"
+      },
+      "finance_current_feed_in_kwh": {
+        "name": "Feed-in energy — current month"
+      },
+      "finance_current_expected_total": {
+        "name": "Expected total costs — current month"
+      },
+      "finance_current_expected_electricity": {
+        "name": "Expected electricity costs — current month"
+      },
+      "finance_current_expected_gas": {
+        "name": "Expected gas costs — current month"
+      },
+      "finance_current_expected_fixed": {
+        "name": "Expected fixed costs — current month"
+      },
+      "finance_current_expected_feed_in": {
+        "name": "Expected feed-in balance — current month"
+      },
+      "finance_previous_electricity_costs": {
+        "name": "Electricity costs — previous month"
+      },
+      "finance_previous_electricity_kwh": {
+        "name": "Electricity usage — previous month"
+      },
+      "finance_previous_gas_costs": {
+        "name": "Gas costs — previous month"
+      },
+      "finance_previous_gas_kwh": {
+        "name": "Gas usage in kWh — previous month"
+      },
+      "finance_previous_gas_m3": {
+        "name": "Gas usage in m³ — previous month"
+      },
+      "finance_previous_feed_in_costs": {
+        "name": "Feed-in financial balance — previous month"
+      },
+      "finance_previous_feed_in_kwh": {
+        "name": "Feed-in energy — previous month"
       }
     }
   },
@@ -1092,7 +1149,8 @@
           "interval_battery_sessions": "Polling Interval - Battery Sessions (5-1440 minutes, default: 60)",
           "interval_chargers": "Polling Interval - Chargers (5-60 minutes, default: 5)",
           "interval_vehicles": "Polling Interval - Vehicles (5-60 minutes, default: 15)",
-          "interval_pv": "Polling Interval - PV (5-60 minutes, default: 5)"
+          "interval_pv": "Polling Interval - PV (5-60 minutes, default: 5)",
+          "monthly_finance_enabled": "Collect monthly usage and costs (extra account API requests)"
         },
         "title": "Sign in to Frank Energie"
       }
