@@ -47,6 +47,7 @@ def test_hacs_candidate_is_full_zip_pre_release_not_default_branch():
     assert "BLOCK: immutable Git tag already exists" in publisher
     assert "Reject stale release train commits" in publisher
     assert "github.sha" in publisher
+    assert "action_required)$'; then" in publisher
 
 
 def test_live_acceptance_and_backout_are_explicit():
