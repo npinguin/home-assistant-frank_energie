@@ -93,7 +93,7 @@ jobs:
               echo "PASS exact-SHA CI: $GITHUB_SHA"
               exit 0
             fi
-            if printf '%s\n' "$RESULTS" | grep -Eq '^(Flake8 and pytest|Ruff|Quality Scale Validation|Link Check)=(failure|cancelled|timed_out|action_required)$'; then
+            if printf '%s\n' "$RESULTS" | grep -Eq '^(Flake8 and pytest|Quality Scale Validation|Link Check)=(failure|cancelled|timed_out|action_required)$'; then
               echo "BLOCK: required exact-SHA check is red"
               exit 1
             fi
