@@ -1364,3 +1364,188 @@ async def test_battery_strategy_sensor_passes_ha_enum_validation(
     validation accepts."""
     state = await _battery_strategy_sensor_state(hass, strategy)
     assert state == strategy.value.lower()
+
+
+# Regression: authenticated account enum data can be null, "unknown", or an
+# API value not declared in the integration's options. Home Assistant must
+# never raise "not in the list of options provided" while registering these.
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("sensor_key", "api_value", "expected"),
+    [
+        ("contract_price_resolution_state", "PT15M", "pt15m"),
+        ("contract_price_resolution_state", "PT60M", "pt60m"),
+        ("contract_price_resolution_state", None, "unavailable"),
+        ("contract_price_resolution_state", "unknown", "unavailable"),
+        ("contract_price_resolution_state", "UNKNOWN", "unavailable"),
+        ("contract_price_resolution_state", "UNAVAILABLE", "unavailable"),
+        ("contract_price_resolution_state", "PT30M", "unavailable"),
+        ("propositionType", "DYNAMIC", "dynamic"),
+        ("propositionType", None, "unavailable"),
+        ("propositionType", "unknown", "unavailable"),
+        ("propositionType", "UNAVAILABLE", "unavailable"),
+        ("propositionType", "MODEL", "model"),
+        ("meterType", "SLM", "slm"),
+        ("meterType", None, "unavailable"),
+        ("meterType", "unknown", "unavailable"),
+        ("meterType", "UNAVAILABLE", "unavailable"),
+        ("meterType", "SMR1", "smr1"),
+        ("meterType", "SMR3", "smr3"),
+    ],
+)
+async def test_account_enum_sensors_pass_real_ha_validation(
+    hass: HomeAssistant, sensor_key: str, api_value: str | None, expected: str
+) -> None:
+    """Missing/unsupported contract values do not block HA entity creation."""
+    from types import SimpleNamespace
+    from unittest.mock import MagicMock
+
+    from custom_components.frank_energie.sensor import (
+        FrankEnergieSensor,
+        SENSOR_TYPES,
+    )
+
+    description = next(d for d in SENSOR_TYPES if d.key == sensor_key)
+    if sensor_key == "contract_price_resolution_state":
+        data = {
+            const.DATA_CONTRACT_PRICE_RESOLUTION_STATE: SimpleNamespace(
+                active_option=api_value,
+                available_options=None,
+                upcoming_change=None,
+                change_request_effective_date=None,
+                is_change_request_possible=False,
+                upcoming_change_effective_date=None,
+            )
+        }
+    elif sensor_key == "propositionType":
+        data = {const.DATA_USER_SITES: SimpleNamespace(propositionType=api_value)}
+    else:
+        data = {
+            const.DATA_USER: SimpleNamespace(connections=[{"meterType": api_value}])
+        }
+
+    coordinator = MagicMock()
+    coordinator.data = data
+    coordinator.last_update_success = True
+
+    state = await _register_sensor_and_get_state(
+        hass,
+        lambda entry: FrankEnergieSensor(coordinator, description, entry),
+    )
+    assert state == expected
+
+
+@pytest.mark.asyncio
+async def test_account_enum_guard_preserves_valid_unknown_option(
+    hass: HomeAssistant,
+) -> None:
+    """An enum explicitly declaring 'unknown' is not forcibly hidden."""
+    from unittest.mock import MagicMock
+
+    from custom_components.frank_energie.sensor import (
+        FrankEnergieEntityDescription,
+        FrankEnergieSensor,
+    )
+    from homeassistant.components.sensor import SensorDeviceClass
+
+    coordinator = MagicMock()
+    coordinator.data = {"test_enum": "UNKNOWN"}
+    coordinator.last_update_success = True
+    desc = FrankEnergieEntityDescription(
+        key="test_allowed_unknown",
+        device_class=SensorDeviceClass.ENUM,
+        options=["unknown", "valid"],
+        value_fn=lambda data: data["test_enum"],
+    )
+    state = await _register_sensor_and_get_state(
+        hass, lambda entry: FrankEnergieSensor(coordinator, desc, entry)
+    )
+    assert state == "unknown"
+
+
+def test_meter_type_preserves_electricity_and_gas_without_new_entities() -> None:
+    """The legacy single meter entity exposes actual per-segment raw types."""
+    from types import SimpleNamespace
+
+    from custom_components.frank_energie.sensor import SENSOR_TYPES
+
+    description = next(d for d in SENSOR_TYPES if d.key == "meterType")
+    # Gas intentionally comes first; electricity is the primary sensor value.
+    data = {
+        const.DATA_USER: SimpleNamespace(
+            connections=[
+                {"segment": "GAS", "meterType": "SMR1"},
+                {"segment": "ELECTRICITY", "meterType": "SMR3"},
+            ]
+        )
+    }
+    assert description.value_fn(data) == "smr3"
+    assert description.attr_fn(data)["meter_types_by_segment"] == {
+        "gas": "smr1",
+        "electricity": "smr3",
+    }
+
+
+def test_account_enum_options_match_shipped_translations() -> None:
+    """HA enum options must have labels in every supported shipped language."""
+    import json
+    from pathlib import Path
+
+    from custom_components.frank_energie.sensor import SENSOR_TYPES
+
+    root = Path(__file__).parents[1].joinpath("custom_components/frank_energie")
+    for key in ("propositionType", "meterType"):
+        description = next(d for d in SENSOR_TYPES if d.key == key)
+        for translation in [
+            root / "strings.json",
+            root / "translations/en.json",
+            root / "translations/nl.json",
+            root / "translations/nl-BE.json",
+            root / "translations/fr.json",
+        ]:
+            payload = json.loads(translation.read_text(encoding="utf-8"))
+            states = payload["entity"]["sensor"][description.translation_key]["state"]
+            assert set(states) == set(description.options), translation
+
+
+def test_service_device_version_matches_installed_manifest() -> None:
+    """Service device software version must never drift from HACS manifest."""
+    import json
+    from pathlib import Path
+
+    from custom_components.frank_energie.const import (
+        SERVICE_NAME_PRICES,
+        VERSION,
+    )
+    from custom_components.frank_energie.helpers import service_device_info
+
+    manifest = json.loads(
+        Path(__file__)
+        .parents[1]
+        .joinpath("custom_components/frank_energie/manifest.json")
+        .read_text(encoding="utf-8")
+    )
+    device = service_device_info("entry_1", SERVICE_NAME_PRICES)
+    assert manifest["version"] == VERSION == device["sw_version"]
+
+
+@pytest.mark.parametrize(
+    ("connections", "expected_primary", "expected_types"),
+    [
+        ([], None, {}),
+        ([{"segment": "ELECTRICITY", "meterType": None}], None, {}),
+        ([{"segment": "GAS", "meterType": "SMR1"}], "smr1", {"gas": "smr1"}),
+    ],
+)
+def test_meter_type_handles_empty_and_gas_only_connections(
+    connections: list[dict], expected_primary: str | None, expected_types: dict
+) -> None:
+    """Absent and single-segment account data must not invent meter values."""
+    from types import SimpleNamespace
+
+    from custom_components.frank_energie.sensor import SENSOR_TYPES
+
+    description = next(d for d in SENSOR_TYPES if d.key == "meterType")
+    data = {const.DATA_USER: SimpleNamespace(connections=connections)}
+    assert description.value_fn(data) == expected_primary
+    assert description.attr_fn(data)["meter_types_by_segment"] == expected_types
