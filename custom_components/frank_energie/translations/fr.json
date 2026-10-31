@@ -717,7 +717,9 @@
       "meter_type": {
         "name": "Type de compteur",
         "state": {
-          "slm": "Compteur intelligent"
+          "slm": "Compteur intelligent",
+          "smr1": "SMR1",
+          "smr3": "SMR3"
         }
       },
       "phone_number": {
@@ -729,7 +731,8 @@
       "proposition_type": {
         "name": "Type d'offre",
         "state": {
-          "dynamic": "Dynamique"
+          "dynamic": "Dynamique",
+          "model": "Modèle"
         }
       },
       "pv_operational_status": {
