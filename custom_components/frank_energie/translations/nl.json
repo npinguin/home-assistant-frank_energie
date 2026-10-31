@@ -81,7 +81,8 @@
           "interval_battery_sessions": "Ophaalinterval - Batterijsessies (5-1440 minuten, standaard: 60)",
           "interval_chargers": "Ophaalinterval - Opladers (5-60 minuten, standaard: 5)",
           "interval_vehicles": "Ophaalinterval - Voertuigen (5-60 minuten, standaard: 15)",
-          "interval_pv": "Ophaalinterval - PV (5-60 minuten, standaard: 5)"
+          "interval_pv": "Ophaalinterval - PV (5-60 minuten, standaard: 5)",
+          "monthly_finance_enabled": "Maandverbruik en -kosten ophalen (extra API-aanvragen)"
         }
       }
     }
@@ -624,7 +625,7 @@
         "name": "EAN (Energy Account Number)"
       },
       "costs_electricity_this_month": {
-        "name": "Kosten elektriciteit deze maand"
+        "name": "Oude alias maandelijkse elektriciteitskosten (niet ondersteund)"
       },
       "elec_lowest_4p": {
         "name": "Laagste gem. elektriciteitsprijs (4 periodes)"
@@ -885,6 +886,63 @@
       },
       "battery_last_update": {
         "name": "Laatste update"
+      },
+      "finance_current_electricity_costs": {
+        "name": "Elektriciteitskosten — deze maand"
+      },
+      "finance_current_electricity_kwh": {
+        "name": "Elektriciteitsverbruik — deze maand"
+      },
+      "finance_current_gas_costs": {
+        "name": "Gaskosten — deze maand"
+      },
+      "finance_current_gas_kwh": {
+        "name": "Gasverbruik in kWh — deze maand"
+      },
+      "finance_current_gas_m3": {
+        "name": "Gasverbruik in m³ — deze maand"
+      },
+      "finance_current_feed_in_costs": {
+        "name": "Financieel resultaat teruglevering — deze maand"
+      },
+      "finance_current_feed_in_kwh": {
+        "name": "Teruggeleverde energie — deze maand"
+      },
+      "finance_current_expected_total": {
+        "name": "Verwachte totale kosten — deze maand"
+      },
+      "finance_current_expected_electricity": {
+        "name": "Verwachte elektriciteitskosten — deze maand"
+      },
+      "finance_current_expected_gas": {
+        "name": "Verwachte gaskosten — deze maand"
+      },
+      "finance_current_expected_fixed": {
+        "name": "Verwachte vaste kosten — deze maand"
+      },
+      "finance_current_expected_feed_in": {
+        "name": "Verwacht resultaat teruglevering — deze maand"
+      },
+      "finance_previous_electricity_costs": {
+        "name": "Elektriciteitskosten — vorige maand"
+      },
+      "finance_previous_electricity_kwh": {
+        "name": "Elektriciteitsverbruik — vorige maand"
+      },
+      "finance_previous_gas_costs": {
+        "name": "Gaskosten — vorige maand"
+      },
+      "finance_previous_gas_kwh": {
+        "name": "Gasverbruik in kWh — vorige maand"
+      },
+      "finance_previous_gas_m3": {
+        "name": "Gasverbruik in m³ — vorige maand"
+      },
+      "finance_previous_feed_in_costs": {
+        "name": "Financieel resultaat teruglevering — vorige maand"
+      },
+      "finance_previous_feed_in_kwh": {
+        "name": "Teruggeleverde energie — vorige maand"
       }
     },
     "binary_sensor": {
