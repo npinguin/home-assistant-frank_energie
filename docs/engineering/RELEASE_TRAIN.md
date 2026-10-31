@@ -164,6 +164,38 @@ delta is proven against the full file tree.
    For any *subsequent* test or stable release use a **new immutable version**.
    Document rollback, limitations and excluded functionality.
 
+## Branch-only cache corrections after v2026.11.1.1
+
+The private Home Assistant 2026.10.4 diagnostics from installed
+`v2026.11.1.1` show a successful BE `MODEL` account fetch and **24
+electricity but only 6 gas customer price slots for 2026-11-01**.
+That is valid *partial source evidence*, not proof of a complete gas
+price day. Finance is still opt-in disabled.
+
+The source audit found two deterministic tomorrow-cache defects:
+
+- The date validator used `electricity or gas`. Because an empty
+  `PriceData` object is truthy, gas-only caches could be rejected
+  even when valid; nonempty electricity could hide stale gas dates.
+  The validator now checks **all actual entries across both segments**.
+- Once any tomorrow prices were cached, same-day retries stopped, even
+  when a subscribed gas stream covered only part of the calendar day.
+  The branch now checks actual UTC interval coverage against the
+  selected local calendar day (including DST transitions) and retries
+  incomplete subscribed segments at the existing coordinator cadence.
+  Cached partial readings remain usable meanwhile. Repeated fetches
+  do not spam a new `tomorrow_prices_available` event.
+
+Synthetic tests cover gas-only, both-segment stale data, partial
+six-hour gas, full-day caching, and 23/25-hour DST boundaries.
+**These changes are after the immutable HACS TEST tag** and are not
+present in the installed `v2026.11.1.1` build. They require new
+exact-head CI, a later **new** versioned test candidate using the
+standard release lifecycle, and real HA/Recorder acceptance.
+
+Do not merge or mark issues #11/#15 and real HA entity-status
+acceptance closed on the basis of these tests.
+
 ## Live BE diagnostics observed from installed 2026.10.31.2
 
 Private HA 2026.10.4 diagnostics confirm **both** independent public
