@@ -580,18 +580,18 @@ def test_provider_data_freshness_separates_api_objects_from_meter_data() -> None
     """An HTTP success can still mean stale meter dates or empty usage."""
     summary = SimpleNamespace(lastMeterReadingDate="2026-10-25")
     usage = SimpleNamespace(
-        electricity=SimpleNamespace(
-            usage_total=0.0, costs_total=None, items=[]
-        ),
+        electricity=SimpleNamespace(usage_total=0.0, costs_total=None, items=[]),
         gas=None,
-        feed_in=SimpleNamespace(
-            usage_total=None, costs_total=0.0, items=[object()]
-        ),
+        feed_in=SimpleNamespace(usage_total=None, costs_total=0.0, items=[object()]),
     )
     invoices = SimpleNamespace(
         all_periods_invoices=[
-            SimpleNamespace(StartDate=datetime.fromisoformat("2026-09-01T00:00:00+02:00")),
-            SimpleNamespace(StartDate=datetime.fromisoformat("2026-10-01T00:00:00+02:00")),
+            SimpleNamespace(
+                StartDate=datetime.fromisoformat("2026-09-01T00:00:00+02:00")
+            ),
+            SimpleNamespace(
+                StartDate=datetime.fromisoformat("2026-10-01T00:00:00+02:00")
+            ),
         ]
     )
     result = _safe_provider_data_freshness(
@@ -721,9 +721,7 @@ def test_ha_entity_summary_limits_device_group_names_to_known_services(
             disabled_by=None,
         ),
     }
-    monkeypatch.setattr(
-        er, "async_get", lambda _: SimpleNamespace(entities=entities)
-    )
+    monkeypatch.setattr(er, "async_get", lambda _: SimpleNamespace(entities=entities))
     monkeypatch.setattr(
         dr,
         "async_get",
@@ -735,9 +733,7 @@ def test_ha_entity_summary_limits_device_group_names_to_known_services(
         ),
     )
 
-    output = _safe_ha_entity_state_summary(
-        hass, SimpleNamespace(entry_id="my-entry")
-    )
+    output = _safe_ha_entity_state_summary(hass, SimpleNamespace(entry_id="my-entry"))
     assert output["by_service"]["Prices"]["available"] == 1
     assert output["by_service"]["Other"]["available"] == 1
     assert "private-meter-model" not in str(output)
