@@ -48,6 +48,8 @@ def test_hacs_candidate_is_full_zip_pre_release_not_default_branch():
     assert "Reject stale release train commits" in publisher
     assert "github.sha" in publisher
     assert "action_required)$'; then" in publisher
+    assert publisher.count("\njobs:\n") == 1
+    assert len(publisher.splitlines()) < 260
 
 
 def test_live_acceptance_and_backout_are_explicit():
