@@ -383,7 +383,9 @@ def test_contract_metadata_does_not_infer_missing_physical_meter_details() -> No
 
 
 @pytest.mark.asyncio
-async def test_diagnostics_redact_nested_provider_identifiers_and_payment_data() -> None:
+async def test_diagnostics_redact_nested_provider_identifiers_and_payment_data() -> (
+    None
+):
     """Raw API models must not expose identifying account, referral or payment IDs."""
     coordinator = SimpleNamespace(
         last_update_success=True,
