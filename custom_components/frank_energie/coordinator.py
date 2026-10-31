@@ -726,9 +726,9 @@ class FrankEnergieCoordinator(DataUpdateCoordinator[FrankEnergieData]):
         tz = ZoneInfo(TIMEZONE_AMSTERDAM)
         utc = ZoneInfo("UTC")
         start = datetime.combine(day, time.min, tzinfo=tz).astimezone(utc)
-        end = datetime.combine(
-            day + timedelta(days=1), time.min, tzinfo=tz
-        ).astimezone(utc)
+        end = datetime.combine(day + timedelta(days=1), time.min, tzinfo=tz).astimezone(
+            utc
+        )
         intervals: list[tuple[datetime, datetime]] = []
         for price in prices.all:
             first = getattr(price, "date_from", None)
