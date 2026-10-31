@@ -104,6 +104,7 @@ from .coordinator import (
     FrankEnergieCoordinator,
     FrankEnergieData,
     SmartBatterySessions,
+    _site_segment_flags,
 )
 from .finance import finance_attributes, finance_reading
 from .helpers import (
@@ -5241,9 +5242,17 @@ async def async_setup_entry(
         config_entry.runtime_data.battery_session_coordinators = session_coordinators
 
     # Safely access user segments from DATA_USER_SITES
-    user_segments = getattr(
-        settings_coordinator.data.get(DATA_USER_SITES), "segments", []
+    # The UserSites top-level segments describe the *first* customer site,
+    # not necessarily the configured delivery site. Price selection already
+    # resolves the selected site; sensor registration must use that same
+    # contract truth or a multi-site account silently loses gas entities.
+    selected_electricity, selected_gas = _site_segment_flags(
+        settings_coordinator.data.get(DATA_USER_SITES),
+        price_coordinator.site_reference,
     )
+    user_segments = (
+        ["ELECTRICITY"] if selected_electricity else []
+    ) + (["GAS"] if selected_gas else [])
 
     user_data: object = None
     if settings_coordinator.api.is_authenticated:
