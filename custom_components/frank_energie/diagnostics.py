@@ -13,12 +13,15 @@ from zoneinfo import ZoneInfo
 from homeassistant.components.diagnostics import async_redact_data
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import (
+    STATE_UNAVAILABLE,
+    STATE_UNKNOWN,
     CONF_ACCESS_TOKEN,
     CONF_PASSWORD,
     CONF_TOKEN,
     CONF_USERNAME,
 )
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import entity_registry as er
 
 from . import FrankEnergieEntryData
 
@@ -361,6 +364,53 @@ def _safe_contract_capabilities(settings_data: object) -> dict[str, object]:
     }
 
 
+
+def _safe_ha_entity_state_summary(
+    hass: HomeAssistant, entry: ConfigEntry
+) -> dict[str, int]:
+    """Summarize actual HA entity states without names, values or identifiers.
+
+    last_reported tracks state writes, including unchanged values, while
+    last_changed cannot be used as an update/freshness indicator.
+    """
+    registry = er.async_get(hass)
+    summary = {
+        "registered": 0,
+        "disabled": 0,
+        "not_loaded": 0,
+        "available": 0,
+        "unknown": 0,
+        "unavailable": 0,
+        "not_reported_in_90_minutes": 0,
+        "missing_report_timestamp": 0,
+    }
+    now = datetime.now(ZoneInfo("UTC"))
+    for entity in registry.entities.values():
+        if getattr(entity, "config_entry_id", None) != entry.entry_id:
+            continue
+        summary["registered"] += 1
+        if getattr(entity, "disabled_by", None) is not None:
+            summary["disabled"] += 1
+            continue
+        state = hass.states.get(entity.entity_id)
+        if state is None:
+            summary["not_loaded"] += 1
+            continue
+        if state.state == STATE_UNAVAILABLE:
+            summary["unavailable"] += 1
+        elif state.state == STATE_UNKNOWN:
+            summary["unknown"] += 1
+        else:
+            summary["available"] += 1
+
+        last_reported = getattr(state, "last_reported", None)
+        if not isinstance(last_reported, datetime) or last_reported.tzinfo is None:
+            summary["missing_report_timestamp"] += 1
+        elif (now - last_reported).total_seconds() >= 5400:
+            summary["not_reported_in_90_minutes"] += 1
+    return summary
+
+
 async def async_get_config_entry_diagnostics(
     hass: HomeAssistant,
     entry: ConfigEntry,
@@ -419,6 +469,7 @@ async def async_get_config_entry_diagnostics(
         "battery_session_coordinators": len(
             runtime_data.battery_session_coordinators,
         ),
+        "ha_entity_state_summary": _safe_ha_entity_state_summary(hass, entry),
         "graphql_request_evidence": (
             trace.snapshot()
             if (trace := getattr(coordinator, "_diagnostic_trace", None)) is not None
