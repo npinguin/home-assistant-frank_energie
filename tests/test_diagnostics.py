@@ -514,6 +514,8 @@ async def test_diagnostics_redact_nested_provider_identifiers_and_payment_data()
     ):
         assert secret not in text
     assert diagnostics["entry"]["entry_id"] == "**REDACTED**"
+    assert diagnostics["coordinator"]["has_cached_today"] is False
+    assert diagnostics["coordinator"]["has_active_today_prices"] is False
 
 
 def test_price_coverage_counts_effective_prices_after_merge_not_raw_input() -> None:
