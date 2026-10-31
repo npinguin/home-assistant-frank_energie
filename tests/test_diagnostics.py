@@ -738,3 +738,143 @@ def test_ha_entity_summary_limits_device_group_names_to_known_services(
     assert output["by_service"]["Other"]["available"] == 1
     assert "private-meter-model" not in str(output)
     assert "example_private" not in str(output)
+
+def _synthetic_gas_price_data(day: date, slots: int):
+    """Create typed, privacy-safe gas records for a future local day."""
+    from datetime import UTC, timedelta
+    from zoneinfo import ZoneInfo
+
+    from python_frank_energie.models import PriceData
+
+    tz = ZoneInfo("Europe/Brussels")
+    first = datetime.combine(day, time.min, tzinfo=tz).astimezone(UTC)
+    data = [
+        {
+            "from": (first + timedelta(hours=i)).isoformat(),
+            "till": (first + timedelta(hours=i + 1)).isoformat(),
+            "marketPrice": 0.1,
+            "marketPriceTax": 0.02,
+            "sourcingMarkupPrice": 0.01,
+            "energyTaxPrice": 0.1,
+        }
+        for i in range(slots)
+    ]
+    return PriceData(data, energy_type="gas")
+
+
+def test_gas_pipeline_distinguishes_source_slots_from_sensor_attributes(
+    freezer,
+) -> None:
+    """GraphQL parse, PriceData.asdict, historical usage and coverage are distinct."""
+    from custom_components.frank_energie.coordinator import FrankEnergieCoordinator
+    from custom_components.frank_energie.diagnostics import (
+        _safe_gas_delivery_pipeline,
+    )
+
+    freezer.move_to(datetime(2026, 7, 20, 13, 0, 0))
+    tomorrow = date(2026, 7, 21)
+    gas = _synthetic_gas_price_data(tomorrow, slots=6)
+    price = SimpleNamespace(
+        data={"gas": gas},
+        user_gas_enabled=True,
+        _covers_local_day=FrankEnergieCoordinator._covers_local_day,
+    )
+    stats = SimpleNamespace(
+        data={
+            "usage": SimpleNamespace(
+                gas=SimpleNamespace(
+                    unit="M3",
+                    usage_total=None,
+                    costs_total=0.0,
+                )
+            )
+        }
+    )
+
+    result = _safe_gas_delivery_pipeline(
+        MagicMock(),
+        SimpleNamespace(entry_id="private"),
+        price,
+        stats,
+        local_today=date(2026, 7, 20),
+    )
+    assert result["site_gas_subscription"] is True
+    assert result["prices"]["parsed_price_slots"] == 6
+    assert result["prices"]["tomorrow_slots"] == 6
+    assert result["prices"]["tomorrow_attribute_slots"] == 6
+    assert result["prices"]["tomorrow_complete"] is False
+    assert result["historical_usage"]["api_segment_parsed"] is True
+    assert result["historical_usage"]["usage_total_reported"] is False
+    assert result["historical_usage"]["costs_total_reported"] is True
+    assert result["historical_usage"]["unit"] == "M3"
+    assert result["recorder_history_verified"] is False
+
+    price.data["gas"] = _synthetic_gas_price_data(tomorrow, slots=0)
+    empty = _safe_gas_delivery_pipeline(
+        MagicMock(),
+        SimpleNamespace(entry_id="private"),
+        price,
+        stats,
+        local_today=date(2026, 7, 20),
+    )
+    assert empty["prices"]["tomorrow_attribute_slots"] == 0
+
+
+def test_gas_entity_pipeline_checks_real_states_and_correct_service_devices(
+    hass, monkeypatch
+) -> None:
+    """Source success does not hide missing gas forecast/usage entities."""
+    from custom_components.frank_energie.diagnostics import _safe_gas_entity_pipeline
+    from homeassistant.helpers import device_registry as dr
+    from homeassistant.helpers import entity_registry as er
+
+    # Entity IDs and device IDs are synthetic and must never be returned.
+    fake = {
+        "one": SimpleNamespace(
+            config_entry_id="target",
+            entity_id="sensor.gas_price_private",
+            unique_id="some-key.gas_markup",
+            device_id="gas-device",
+            disabled_by=None,
+        ),
+        "two": SimpleNamespace(
+            config_entry_id="target",
+            entity_id="sensor.gas_forecast_private",
+            unique_id="some-key.gas_tomorrow_avg",
+            device_id="wrong-device",
+            disabled_by=None,
+        ),
+        "three": SimpleNamespace(
+            config_entry_id="target",
+            entity_id="sensor.gas_usage_private",
+            unique_id="some-key.usage_gas_yesterday",
+            device_id="usage-device",
+            disabled_by=None,
+        ),
+    }
+    hass.states.async_set("sensor.gas_price_private", "0.1")
+    hass.states.async_set("sensor.gas_forecast_private", "unavailable")
+    monkeypatch.setattr(er, "async_get", lambda _: SimpleNamespace(entities=fake))
+    monkeypatch.setattr(
+        dr,
+        "async_get",
+        lambda _: SimpleNamespace(
+            devices={
+                "gas-device": SimpleNamespace(model="Gasprices"),
+                "wrong-device": SimpleNamespace(model="Usage"),
+                "usage-device": SimpleNamespace(model="Usage"),
+            }
+        ),
+    )
+
+    result = _safe_gas_entity_pipeline(
+        hass, SimpleNamespace(entry_id="target")
+    )
+    assert result["current_prices"]["gas_markup"]["state"] == "available"
+    assert result["current_prices"]["gas_markup"]["correct_device_group"] is True
+    assert result["forecast"]["gas_tomorrow_avg"]["state"] == "unavailable"
+    assert result["forecast"]["gas_tomorrow_avg"]["correct_device_group"] is False
+    assert result["historical_usage"]["usage_gas_yesterday"]["state"] == "not_loaded"
+    assert result["historical_usage"]["costs_gas_yesterday"]["state"] == "not_registered"
+    assert "gas_price_private" not in str(result)
+    assert "some-key" not in str(result)
