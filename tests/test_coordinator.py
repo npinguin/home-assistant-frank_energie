@@ -2457,6 +2457,7 @@ async def test_is_cache_fresh_accepts_valid_same_day_tomorrow_cache(
 
     assert price_coordinator._is_cache_fresh(now_utc) is True
 
+
 def test_tomorrow_cache_date_validation_checks_gas_only_and_both_segments() -> None:
     """Gas-only subscriptions work, but stale gas cannot hide behind valid electricity."""
     tomorrow = date(2026, 7, 21)
@@ -2485,6 +2486,7 @@ def test_tomorrow_cache_date_validation_checks_gas_only_and_both_segments() -> N
     assert not FrankEnergieCoordinator._tomorrow_cache_matches_date(
         mixed_stale, tomorrow
     )
+
 
 def _day_prices(day: date, *, segment: str, hours: int | None = None) -> PriceData:
     """Build real timestamped slots for a local day without assuming 24 DST hours."""
@@ -2545,7 +2547,9 @@ async def test_partial_subscribed_gas_tomorrow_cache_is_retried(
 
     assert not coordinator._tomorrow_cache_covers_selected_site(partial, tomorrow)
     assert coordinator._tomorrow_cache_covers_selected_site(complete, tomorrow)
-    assert await coordinator._refresh_tomorrow_cache(today, tomorrow, now_utc) is complete
+    assert (
+        await coordinator._refresh_tomorrow_cache(today, tomorrow, now_utc) is complete
+    )
     coordinator._fetch_tomorrow_data.assert_awaited_once()
 
 
@@ -2568,8 +2572,11 @@ async def test_complete_subscribed_gas_tomorrow_cache_avoids_repeat_call(
     coordinator.last_fetch_tomorrow = now_utc
     coordinator._fetch_tomorrow_data = AsyncMock()
 
-    assert await coordinator._refresh_tomorrow_cache(today, tomorrow, now_utc) is complete
+    assert (
+        await coordinator._refresh_tomorrow_cache(today, tomorrow, now_utc) is complete
+    )
     coordinator._fetch_tomorrow_data.assert_not_called()
+
 
 @pytest.mark.asyncio
 async def test_partial_tomorrow_retry_does_not_spam_available_event(
