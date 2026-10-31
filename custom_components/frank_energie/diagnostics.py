@@ -5,10 +5,10 @@ from __future__ import annotations
 from collections import Counter
 from dataclasses import fields, is_dataclass
 from datetime import date, datetime, time
-from zoneinfo import ZoneInfo
 from decimal import Decimal
 from enum import Enum
 from uuid import UUID
+from zoneinfo import ZoneInfo
 
 from homeassistant.components.diagnostics import async_redact_data
 from homeassistant.config_entries import ConfigEntry
@@ -192,6 +192,7 @@ def _safe_price_coverage(data: object) -> dict[str, object]:
             "slots_by_local_day": dict(sorted(local_days.items())[:4]),
             "price_points": price_count,
             "has_price_points": price_count > 0 if price_count is not None else None,
+            "has_current_price": bool(getattr(source, "current", None)),
             "raw_input_price_points": (
                 len(raw_prices) if isinstance(raw_prices, (list, tuple)) else None
             ),
@@ -216,6 +217,88 @@ def _safe_finance_coverage(data: object) -> dict[str, object]:
         snapshot = data.get(key)
         result[key] = snapshot is not None
     return result
+
+
+
+def _safe_provider_data_freshness(
+    data: object, *, local_today: date | None = None
+) -> dict[str, object]:
+    """Report source data age/content, never usage, costs, IDs or raw dates.
+
+    A successful GraphQL response may contain a summary based on an old meter
+    reading, or a PeriodUsageAndCosts object with no actual segment values.
+    Preserve that distinction in HA diagnostics without exposing amounts.
+    """
+    if not isinstance(data, dict):
+        return {}
+    today = local_today or datetime.now(ZoneInfo("Europe/Brussels")).date()
+
+    def days_ago(value: object) -> int | None:
+        if isinstance(value, datetime):
+            stamp = value.date()
+        elif isinstance(value, date):
+            stamp = value
+        elif isinstance(value, str):
+            try:
+                stamp = date.fromisoformat(value[:10])
+            except ValueError:
+                return None
+        else:
+            return None
+        elapsed = (today - stamp).days
+        return elapsed if 0 <= elapsed <= 36500 else None
+
+    summary = data.get("month_summary")
+    usage = data.get("usage")
+    invoices = data.get("invoices")
+    segments: dict[str, object] = {}
+    for name, attr in (
+        ("electricity", "electricity"),
+        ("gas", "gas"),
+        ("feed_in", "feed_in"),
+    ):
+        segment = getattr(usage, attr, None) if usage is not None else None
+        if segment is None:
+            segments[name] = {"present": False}
+            continue
+        items = getattr(segment, "items", None)
+        segments[name] = {
+            "present": True,
+            "usage_total_reported": getattr(segment, "usage_total", None) is not None,
+            "costs_total_reported": getattr(segment, "costs_total", None) is not None,
+            "intervals_reported": len(items) if isinstance(items, (list, tuple)) else None,
+        }
+
+    all_invoices = getattr(invoices, "all_periods_invoices", None)
+    latest_invoice_age_days = None
+    if isinstance(all_invoices, (list, tuple)):
+        ages = [
+            age
+            for invoice in all_invoices
+            if (age := days_ago(getattr(invoice, "StartDate", None))) is not None
+        ]
+        latest_invoice_age_days = min(ages, default=None)
+    return {
+        "month_summary": {
+            "present": summary is not None,
+            "last_meter_reading_age_days": (
+                days_ago(getattr(summary, "lastMeterReadingDate", None))
+                if summary is not None
+                else None
+            ),
+        },
+        "usage": {
+            "present": usage is not None,
+            "segments": segments,
+        },
+        "invoices": {
+            "present": invoices is not None,
+            "invoice_count": (
+                len(all_invoices) if isinstance(all_invoices, (list, tuple)) else None
+            ),
+            "latest_invoice_start_age_days": latest_invoice_age_days,
+        },
+    }
 
 
 def _safe_contract_capabilities(settings_data: object) -> dict[str, object]:
@@ -355,6 +438,11 @@ async def async_get_config_entry_diagnostics(
             ),
             "price_coverage": _safe_price_coverage(coordinator.data),
             "finance_coverage": _safe_finance_coverage(
+                getattr(
+                    getattr(runtime_data, "statistics_coordinator", None), "data", None
+                )
+            ),
+            "provider_data_freshness": _safe_provider_data_freshness(
                 getattr(
                     getattr(runtime_data, "statistics_coordinator", None), "data", None
                 )
