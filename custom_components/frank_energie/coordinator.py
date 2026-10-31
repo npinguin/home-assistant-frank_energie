@@ -2,18 +2,17 @@
 Fetching the latest data from Frank Energie and updating the states."""
 
 # coordinator.py
-# version 2026.06.15
+# version 2026.10.23
 from __future__ import annotations
 
 import asyncio
 import copy
 import logging
-
-# import secrets
 import sys
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, replace
 from datetime import date, datetime, time, timedelta
-from typing import Any, Awaitable, Callable, Final, TypedDict, cast
+from typing import Any, Final, TypedDict, cast
 from zoneinfo import ZoneInfo
 
 from aiohttp import ClientError
@@ -27,7 +26,6 @@ from homeassistant.const import (
 )
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryAuthFailed
-from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.update_coordinator import (
     DataUpdateCoordinator,
     UpdateFailed,
@@ -37,9 +35,9 @@ from python_frank_energie import FrankEnergie
 from python_frank_energie.exceptions import (
     AuthException,
     AuthRequiredException,
-    NoMarketPricesAvailableException,
     FrankEnergieException,
     NetworkError,
+    NoMarketPricesAvailableException,
     RequestException,
 )
 from python_frank_energie.models import (
@@ -65,10 +63,13 @@ from python_frank_energie.models import (
 )
 
 from .const import (
-    TIMEZONE_AMSTERDAM,
-    TOMORROW_PUBLICATION_HOUR_LOCAL,
-    SUPPORTED_COUNTRIES,
-    SUPPORTED_RESOLUTIONS,
+    CONF_INTERVAL_BATTERIES,
+    CONF_INTERVAL_BATTERY_SESSIONS,
+    CONF_INTERVAL_CHARGERS,
+    CONF_INTERVAL_PV,
+    CONF_INTERVAL_SETTINGS,
+    CONF_INTERVAL_STATISTICS,
+    CONF_INTERVAL_VEHICLES,
     COUNTRY_USES_SIMPLE_MARKET_PRICES,
     DATA_BATTERIES,
     DATA_BATTERY_DETAILS,
@@ -88,23 +89,20 @@ from .const import (
     DATA_USER,
     DATA_USER_SITES,
     DATA_USER_SMART_FEED_IN,
-    DEFAULT_RESOLUTION,
-    EVENT_FRANK_ENERGIE,
-    CONF_INTERVAL_SETTINGS,
-    CONF_INTERVAL_STATISTICS,
-    CONF_INTERVAL_BATTERIES,
-    CONF_INTERVAL_BATTERY_SESSIONS,
-    CONF_INTERVAL_CHARGERS,
-    CONF_INTERVAL_VEHICLES,
-    CONF_INTERVAL_PV,
-    DEFAULT_INTERVAL_SETTINGS,
-    DEFAULT_INTERVAL_PRICES,
-    DEFAULT_INTERVAL_STATISTICS,
     DEFAULT_INTERVAL_BATTERIES,
     DEFAULT_INTERVAL_BATTERY_SESSIONS,
     DEFAULT_INTERVAL_CHARGERS,
-    DEFAULT_INTERVAL_VEHICLES,
+    DEFAULT_INTERVAL_PRICES,
     DEFAULT_INTERVAL_PV,
+    DEFAULT_INTERVAL_SETTINGS,
+    DEFAULT_INTERVAL_STATISTICS,
+    DEFAULT_INTERVAL_VEHICLES,
+    DEFAULT_RESOLUTION,
+    EVENT_FRANK_ENERGIE,
+    SUPPORTED_COUNTRIES,
+    SUPPORTED_RESOLUTIONS,
+    TIMEZONE_AMSTERDAM,
+    TOMORROW_PUBLICATION_HOUR_LOCAL,
 )
 from .helpers import decrypt_password, price_cache_store
 from .mutation_queue import MutationQueue
@@ -455,14 +453,12 @@ class FrankEnergieCoordinator(DataUpdateCoordinator[FrankEnergieData]):
         self._country_code: str | None = self.hass.config.country
         self.hass_country_code: str | None = self.hass.config.country
         self._user_country: str | None = self.country_code
-        self._connection_id: str | None = (
-            None  # cache voor contractPriceResolutionState
-        )
+        # Cached electricity connection ID for contractPriceResolutionState.
+        self._connection_id: str | None = None
         self._api_resolution_state: ContractPriceResolutionState | None = None
         self._resolution_change_pending: bool = False
         self.enode_chargers: EnodeChargers | None = None
         self.data: FrankEnergieData = _empty_data()
-        # self._update_interval = timedelta(seconds=DEFAULT_REFRESH_INTERVAL)
         self.update_interval = timedelta(
             minutes=15 if self.resolution == "PT15M" else 60
         )
@@ -497,7 +493,7 @@ class FrankEnergieCoordinator(DataUpdateCoordinator[FrankEnergieData]):
         lock = getattr(api, "_frank_energie_auth_lock", None)
         if lock is None:
             lock = asyncio.Lock()
-            setattr(api, "_frank_energie_auth_lock", lock)
+            api._frank_energie_auth_lock = lock
         return lock
 
     @property
@@ -938,28 +934,16 @@ class FrankEnergieCoordinator(DataUpdateCoordinator[FrankEnergieData]):
                 "Skipping user sites fetch because the client is not authenticated"
             )
             return None
-
         try:
             sites = await self.api.UserSites()
+            if "ELECTRICITY" in sites.segments:
+                self.user_electricity_enabled = True
+            if "GAS" in sites.segments:
+                self.user_gas_enabled = True
+            return sites
         except AuthException as ex:
-            _LOGGER.warning(
-                "Authentication failed while fetching user sites: %s",
-                ex,
-            )
+            _LOGGER.warning("Authentication failed while fetching user sites: %s", ex)
             return None
-        except RequestException as ex:
-            _LOGGER.warning(
-                "Failed to fetch user sites: %s",
-                ex,
-            )
-            return None
-
-        if "ELECTRICITY" in sites.segments:
-            self.user_electricity_enabled = True
-        if "GAS" in sites.segments:
-            self.user_gas_enabled = True
-
-        return sites
 
     async def _fetch_month_summary(self) -> MonthSummary | None:
         """Fetch month summary from the API."""
@@ -1081,6 +1065,9 @@ class FrankEnergieCoordinator(DataUpdateCoordinator[FrankEnergieData]):
                         self._country_code = country_code
             if not self._connection_id:
                 self._connection_id = _extract_electricity_connection_id(user_data)
+                _LOGGER.debug(
+                    "Extracted electricity connection ID: %s", self._connection_id
+                )
 
             return user_data
         except AuthException as ex:
@@ -1801,19 +1788,6 @@ class FrankEnergieCoordinator(DataUpdateCoordinator[FrankEnergieData]):
             "serial_number": serial_number,
         }
 
-    def _get_public_api(self) -> FrankEnergie:
-        """Lazily create a credential-free client for public price queries.
-
-        Public country prices must not inherit an account's bearer token.
-        Avoid allocating a second client for coordinators that never fetch prices.
-        The HTTP session remains owned by Home Assistant.
-        """
-        client = getattr(self, "_public_api", None)
-        if client is None:
-            client = FrankEnergie(clientsession=async_get_clientsession(self.hass))
-            self._public_api = client
-        return client
-
     async def _fetch_public_prices_for_range(
         self, start_date: date, end_date: date, country_code: str
     ) -> MarketPrices | None:
@@ -1824,14 +1798,13 @@ class FrankEnergieCoordinator(DataUpdateCoordinator[FrankEnergieData]):
             self.resolution,
         )
 
-        public_api = self._get_public_api()
         try:
             if COUNTRY_USES_SIMPLE_MARKET_PRICES.get(country_code, False):
-                return await public_api.country_prices(
+                return await self.api.country_prices(
                     country_code, start_date, end_date, self.resolution
                 )
 
-            return await public_api.prices(
+            return await self.api.prices(
                 start_date,
                 resolution=self.resolution,
             )
@@ -1850,15 +1823,6 @@ class FrankEnergieCoordinator(DataUpdateCoordinator[FrankEnergieData]):
         except NetworkError as err:
             _LOGGER.warning("Failed to fetch public prices: %s", err)
             return None
-
-        except FrankEnergieException:
-            _LOGGER.error(
-                "Public MarketPrices failed (country=%s date=%s resolution=%s)",
-                country_code,
-                start_date,
-                self.resolution,
-            )
-            raise
 
     async def _fetch_user_prices_for_range(
         self,
@@ -2319,20 +2283,19 @@ class FrankEnergieCoordinator(DataUpdateCoordinator[FrankEnergieData]):
 
     @property
     def resolution(self) -> str:
-        """Return a GraphQL-supported resolution, even for non-dynamic contracts.
-
-        An authenticated account can return an empty or unsupported
-        contractPriceResolutionState.activeOption. Never pass that value
-        straight into GraphQL's required PriceResolution enum.
-        """
+        """Effective price resolution used for API queries."""
         if self.config_entry is None:
             return DEFAULT_RESOLUTION
 
         configured = self.config_entry.options.get("resolution", DEFAULT_RESOLUTION)
-        if configured not in SUPPORTED_RESOLUTIONS:
-            configured = DEFAULT_RESOLUTION
 
-        if self._api_resolution_state and not self._resolution_change_pending:
+        # An anonymous entry uses its own configured interval. During a pending
+        # change, use the selected option until the account API confirms it.
+        if (
+            self.api.is_authenticated
+            and not self._resolution_change_pending
+            and self._api_resolution_state is not None
+        ):
             active = self._api_resolution_state.activeOption
             if active in SUPPORTED_RESOLUTIONS:
                 return active
@@ -2342,7 +2305,15 @@ class FrankEnergieCoordinator(DataUpdateCoordinator[FrankEnergieData]):
                 configured,
             )
 
-        return configured
+        if configured in SUPPORTED_RESOLUTIONS:
+            return configured
+
+        _LOGGER.debug(
+            "Unsupported configured price resolution %r; falling back to %s",
+            configured,
+            DEFAULT_RESOLUTION,
+        )
+        return DEFAULT_RESOLUTION
 
     @property
     def api_resolution(self) -> str | None:
@@ -2594,7 +2565,7 @@ class FrankEnergiePriceCoordinator(FrankEnergieCoordinator):
         return False
 
     def _is_cache_resolution_valid(self) -> bool:
-        """Check if the cached resolution matches the configured resolution."""
+        """Check whether cached price intervals match the effective query resolution."""
         if not self._static_prices_today or not self.config_entry:
             return True
 
@@ -2605,8 +2576,7 @@ class FrankEnergiePriceCoordinator(FrankEnergieCoordinator):
             return True
 
         cached_res = price_series.resolution_minutes
-        config_value = self.config_entry.options.get("resolution", DEFAULT_RESOLUTION)
-        expected_res = 15 if config_value == "PT15M" else 60
+        expected_res = 15 if self.resolution == "PT15M" else 60
 
         if cached_res != expected_res:
             _LOGGER.debug(

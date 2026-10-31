@@ -276,7 +276,10 @@ class ConfigFlow(config_entries.ConfigFlow):
                         getattr(site, "status", "NO_STATUS")
                         for site in user_sites.deliverySites
                     ]
-                    error_msg = f"No suitable sites found. Available sites: {len(user_sites.deliverySites)}, Statuses: {set(available_statuses)}"
+                    error_msg = (
+                        f"No suitable sites found. Available sites: {len(user_sites.deliverySites)}, "
+                        f"Statuses: {set(available_statuses)}"
+                    )
                     _LOGGER.error(error_msg)
                     raise NoSitesFoundError(error_msg)
 
@@ -406,10 +409,10 @@ class ConfigFlow(config_entries.ConfigFlow):
         if not user_input:
             return self._show_login_form()
 
-        errors = self._validate_login_input(user_input)
+        validation_errors = self._validate_login_input(user_input)
 
-        if errors:
-            return self._show_login_form(errors=errors)
+        if validation_errors:
+            return self._show_login_form(errors=validation_errors)
 
         try:
             auth = await self._authenticate(user_input)
