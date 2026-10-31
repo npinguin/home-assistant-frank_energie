@@ -848,31 +848,7 @@ def format_user_name(data: dict) -> str | None:
     return None
 
 
-STATIC_ENODE_def _get_user_meter_types_by_segment(data: dict) -> dict[str, str]:
-    """Preserve independently reported electricity/gas meter types."""
-    user = data.get(DATA_USER)
-    connections = getattr(user, "connections", None) or []
-    types: dict[str, str] = {}
-    for index, connection in enumerate(connections, start=1):
-        if not isinstance(connection, dict):
-            continue
-        raw_type = connection.get("meterType")
-        if not isinstance(raw_type, str) or not raw_type.strip():
-            continue
-        segment = connection.get("segment")
-        if not isinstance(segment, str) or not segment.strip():
-            segment = f"connection_{index}"
-        types[segment.strip().lower()] = raw_type.strip().lower()
-    return types
-
-
-def _get_primary_user_meter_type(data: dict) -> str | None:
-    """Keep existing entity identity; prioritize electricity."""
-    types = _get_user_meter_types_by_segment(data)
-    return types.get("electricity") or next(iter(types.values()), None)
-
-
-SENSOR_TYPES: tuple[FrankEnergieEntityDescription, ...] = (
+STATIC_ENODE_SENSOR_TYPES: tuple[FrankEnergieEntityDescription, ...] = (
     FrankEnergieEntityDescription(
         key="enode_total_chargers",
         native_unit_of_measurement=None,
@@ -1748,6 +1724,32 @@ def _get_price_resolution_attributes(data: dict) -> dict:
         "upcoming_change": upcoming,
         "upcoming_change_effective_date": state.upcoming_change_effective_date,
     }
+
+
+
+def _get_user_meter_types_by_segment(data: dict) -> dict[str, str]:
+    """Preserve independently reported electricity/gas meter types."""
+    user = data.get(DATA_USER)
+    connections = getattr(user, "connections", None) or []
+    types: dict[str, str] = {}
+    for index, connection in enumerate(connections, start=1):
+        if not isinstance(connection, dict):
+            continue
+        raw_type = connection.get("meterType")
+        if not isinstance(raw_type, str) or not raw_type.strip():
+            continue
+        segment = connection.get("segment")
+        if not isinstance(segment, str) or not segment.strip():
+            segment = f"connection_{index}"
+        types[segment.strip().lower()] = raw_type.strip().lower()
+    return types
+
+
+def _get_primary_user_meter_type(data: dict) -> str | None:
+    """Keep existing entity identity; prioritize electricity."""
+    types = _get_user_meter_types_by_segment(data)
+    return types.get("electricity") or next(iter(types.values()), None)
+
 
 
 SENSOR_TYPES: tuple[FrankEnergieEntityDescription, ...] = (
