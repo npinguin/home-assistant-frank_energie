@@ -90,6 +90,56 @@ def _safe_period(value: object) -> str | None:
     return None
 
 
+
+def _finite_numeric_state(container: dict[str, Any], field: str) -> str:
+    """Reveal only missing/null/zero/sign, never source numeric amounts."""
+    if field not in container:
+        return "missing"
+    value = container[field]
+    if value is None:
+        return "null"
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        if value == 0:
+            return "zero"
+        if value > 0:
+            return "positive"
+        if value < 0:
+            return "negative"
+    return "other"
+
+
+def _finance_field_states(root: object) -> dict[str, str]:
+    """Probe raw MonthInsights presence before the client coerces null to 0."""
+    if not isinstance(root, dict):
+        return {}
+    fields = (
+        "expectedCosts",
+        "expectedCostsGas",
+        "expectedCostsFixed",
+        "expectedCostsElectricity",
+        "expectedCostsFeedIn",
+        "expectedCostsUntilLastMeterReading",
+        "actualCostsUntilLastMeterReading",
+        "meterReadingDayCompleteness",
+    )
+    states = {field: _finite_numeric_state(root, field) for field in fields}
+    for group in ("gasDifference", "electricityDifference", "feedInDifference"):
+        section = root.get(group)
+        if isinstance(section, dict):
+            for field in ("actualUsage", "actualCosts", "expectedUsage", "expectedCosts"):
+                states[f"{group}.{field}"] = _finite_numeric_state(section, field)
+        else:
+            states[group] = "null" if group in root else "missing"
+    states["lastMeterReadingDate"] = (
+        "missing"
+        if "lastMeterReadingDate" not in root
+        else "null"
+        if root["lastMeterReadingDate"] is None
+        else "present"
+    )
+    return states
+
+
 def _response_metadata(response: object) -> dict[str, object]:
     """Extract only recognized GraphQL response topology and price list counts."""
     if not isinstance(response, dict):
@@ -119,6 +169,12 @@ def _response_metadata(response: object) -> dict[str, object]:
             if value == {} or value == []
             else "present"
         )
+        if key == "monthInsights":
+            result["month_insights_source_states"] = _finance_field_states(value)
+        elif key == "monthSummary" and isinstance(value, dict):
+            result["month_summary_reading_date_reported"] = bool(
+                value.get("lastMeterReadingDate")
+            )
         if key in ("marketPrices", "customerMarketPrices") and isinstance(value, dict):
             for segment, field_name in (
                 ("electricity", "electricityPrices"),
