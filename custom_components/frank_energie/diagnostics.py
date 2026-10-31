@@ -543,6 +543,8 @@ def _safe_gas_delivery_pipeline(
     entry: ConfigEntry,
     price_coordinator: object,
     statistics_coordinator: object,
+    *,
+    local_today: date | None = None,
 ) -> dict[str, object]:
     """Trace gas provider models to selected prices, usage and real HA sensors.
 
@@ -550,7 +552,7 @@ def _safe_gas_delivery_pipeline(
     addresses or raw provider payloads enter the diagnostic.
     """
     local_tz = ZoneInfo("Europe/Brussels")
-    local_today = datetime.now(local_tz).date()
+    local_today = local_today or datetime.now(local_tz).date()
     tomorrow = local_today + timedelta(days=1)
     price_data = getattr(price_coordinator, "data", None)
     gas = price_data.get("gas") if isinstance(price_data, dict) else None
@@ -574,7 +576,17 @@ def _safe_gas_delivery_pipeline(
                 "total", tomorrow_only=True, timezone="Europe/Amsterdam"
             )
             if isinstance(rendered, list):
-                attr_slot_count = len(rendered)
+                # The pinned API client returns a one-element *message* or
+                # *error* list when no tomorrow data can be rendered. Those
+                # placeholders are not price slots and must not look valid.
+                attr_slot_count = sum(
+                    1
+                    for row in rendered
+                    if isinstance(row, dict)
+                    and isinstance(row.get("from"), datetime)
+                    and isinstance(row.get("till"), datetime)
+                    and isinstance(row.get("price"), (int, float))
+                )
         except (AttributeError, ValueError, KeyError, TypeError):
             pass
 
