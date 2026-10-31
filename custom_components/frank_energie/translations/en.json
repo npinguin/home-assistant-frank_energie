@@ -715,7 +715,7 @@
         "name": "Last meter reading date"
       },
       "meter_type": {
-        "name": "Meter Type",
+        "name": "Meter code (Frank API)",
         "state": {
           "slm": "Smart meter",
           "smr1": "SMR1",
