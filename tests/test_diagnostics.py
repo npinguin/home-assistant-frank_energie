@@ -363,6 +363,76 @@ def test_variable_model_contract_reports_meter_codes_as_opaque_api_metadata() ->
     assert "productName" not in str(result)
 
 
+
+def test_pinned_client_connection_dataclasses_are_reported_without_ids() -> None:
+    """Real User.connections are Connection dataclasses, not dicts."""
+    from python_frank_energie.models import Connection
+
+    electricity = Connection.from_dict(
+        {
+            "id": "sensitive-connection-123",
+            "segment": "ELECTRICITY",
+            "meterType": "SMR3",
+            "lastMeterReadingDate": "2026-10-30",
+            "externalDetails": {
+                "contract": {
+                    "contractType": "MODEL",
+                    "productName": "sensitive-product-name",
+                },
+            },
+        }
+    )
+    gas = Connection.from_dict(
+        {
+            "id": "sensitive-gas-id",
+            "segment": "GAS",
+            "meterType": "SMR1",
+            "lastMeterReadingDate": None,
+            "externalDetails": {"contract": {"contractType": "MODEL"}},
+        }
+    )
+    result = _safe_contract_capabilities(
+        {
+            "user_sites": SimpleNamespace(propositionType="MODEL"),
+            "user": SimpleNamespace(connections=[electricity, gas]),
+        }
+    )
+    assert result["segments"]["electricity"] == {
+        "contract_type": "model",
+        "reported_meter_code": "SMR3",
+        "last_meter_reading_reported": True,
+    }
+    assert result["segments"]["gas"] == {
+        "contract_type": "model",
+        "reported_meter_code": "SMR1",
+        "last_meter_reading_reported": False,
+    }
+    for sensitive in (
+        "sensitive-connection",
+        "sensitive-gas-id",
+        "sensitive-product-name",
+    ):
+        assert sensitive not in str(result)
+
+
+def test_nested_fallback_contract_dataclass_and_absent_metadata() -> None:
+    """Known source metadata survives; absent meter properties are not invented."""
+    from python_frank_energie.models import Connection
+
+    connection = Connection.from_dict(
+        {"segment": "GAS", "contract": {"contractType": "MODEL"}}
+    )
+    result = _safe_contract_capabilities(
+        {
+            "user_sites": SimpleNamespace(propositionType="MODEL"),
+            "user": SimpleNamespace(connections=[connection]),
+        }
+    )
+    assert result["segments"]["gas"]["contract_type"] == "model"
+    assert result["segments"]["gas"]["reported_meter_code"] is None
+    assert result["segments"]["gas"]["last_meter_reading_reported"] is False
+
+
 def test_contract_metadata_does_not_infer_missing_physical_meter_details() -> None:
     """No code -> no invented meter class; model must not imply dynamic tariff."""
     result = _safe_contract_capabilities(
