@@ -3229,7 +3229,12 @@ class FrankEnergieStatisticsCoordinator(FrankEnergieCoordinator):
             result: MonthInsights | None = await self.api.month_insights(
                 self.site_reference, period
             )
-        except (AuthException, RequestException, FrankEnergieException, ClientError) as ex:
+        except (
+            AuthException,
+            RequestException,
+            FrankEnergieException,
+            ClientError,
+        ) as ex:
             _LOGGER.debug(
                 "Month insights unavailable for %s (%s)", period, type(ex).__name__
             )
