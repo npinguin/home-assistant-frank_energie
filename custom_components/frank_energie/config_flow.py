@@ -33,6 +33,7 @@ from .const import (
     DOMAIN,
     CONF_INTERVAL_SETTINGS,
     CONF_INTERVAL_STATISTICS,
+    CONF_MONTHLY_FINANCE_ENABLED,
     CONF_INTERVAL_BATTERIES,
     CONF_INTERVAL_BATTERY_SESSIONS,
     CONF_INTERVAL_CHARGERS,
@@ -800,6 +801,12 @@ class FrankEnergieOptionsFlowHandler(config_entries.OptionsFlow):
             CONF_INTERVAL_STATISTICS: int(
                 user_input.get(CONF_INTERVAL_STATISTICS, DEFAULT_INTERVAL_STATISTICS)
             ),
+            CONF_MONTHLY_FINANCE_ENABLED: bool(
+                user_input.get(
+                    CONF_MONTHLY_FINANCE_ENABLED,
+                    entry.options.get(CONF_MONTHLY_FINANCE_ENABLED, False),
+                )
+            ),
             CONF_INTERVAL_BATTERIES: int(
                 user_input.get(CONF_INTERVAL_BATTERIES, DEFAULT_INTERVAL_BATTERIES)
             ),
@@ -957,6 +964,10 @@ class FrankEnergieOptionsFlowHandler(config_entries.OptionsFlow):
             ): NumberSelector(
                 NumberSelectorConfig(min=15, max=1440, mode=NumberSelectorMode.SLIDER)
             ),
+            vol.Optional(
+                CONF_MONTHLY_FINANCE_ENABLED,
+                default=entry.options.get(CONF_MONTHLY_FINANCE_ENABLED, False),
+            ): bool,
         }
 
         if has_batteries:
