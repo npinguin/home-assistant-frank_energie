@@ -363,7 +363,6 @@ def test_variable_model_contract_reports_meter_codes_as_opaque_api_metadata() ->
     assert "productName" not in str(result)
 
 
-
 def test_pinned_client_connection_dataclasses_are_reported_without_ids() -> None:
     """Real User.connections are Connection dataclasses, not dicts."""
     from python_frank_energie.models import Connection
