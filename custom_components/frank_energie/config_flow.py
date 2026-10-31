@@ -553,11 +553,30 @@ class ConfigFlow(config_entries.ConfigFlow):
     async def _async_create_entry(self, data: dict[str, Any]) -> ConfigFlowResult:
         """Create a configuration entry, or update the existing one during reconfigure."""
         if self.source == config_entries.SOURCE_RECONFIGURE:
+            # Resolve the authenticated site before mutating an anonymous entry.
             reconfigure_entry = self._get_reconfigure_entry()
-            updated_data = {**reconfigure_entry.data, **data}
+            selected_site = data.get(CONF_SITE)
+            if not selected_site:
+                raise ValueError("A delivery site must be selected before reconfigure")
+
+            updated_data = {
+                **reconfigure_entry.data,
+                CONF_ACCESS_TOKEN: data[CONF_ACCESS_TOKEN],
+                CONF_TOKEN: data[CONF_TOKEN],
+                CONF_SITE: selected_site,
+            }
+            updated_data.pop(CONF_USERNAME, None)
+            updated_data.pop(CONF_PASSWORD, None)
+            updated_options = {
+                **reconfigure_entry.options,
+                CONF_USERNAME: data[CONF_USERNAME],
+                CONF_PASSWORD: data[CONF_PASSWORD],
+            }
             return self.async_update_reload_and_abort(
                 reconfigure_entry,
                 data=updated_data,
+                options=updated_options,
+                title=data.get("site_title") or reconfigure_entry.title,
             )
 
         # Construct options dictionary with credentials
@@ -686,6 +705,10 @@ class ConfigFlow(config_entries.ConfigFlow):
             CONF_ACCESS_TOKEN: auth.authToken,
             CONF_TOKEN: auth.refreshToken,
         }
+        if self.source == config_entries.SOURCE_RECONFIGURE:
+            # Never write new tokens before the site selection is confirmed.
+            return await self.async_step_site()
+
         if self._reauth_entry:
             # Preserve existing entry data/options
             updated_options = {
