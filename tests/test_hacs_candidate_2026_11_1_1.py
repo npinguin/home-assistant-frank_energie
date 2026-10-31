@@ -45,6 +45,8 @@ def test_hacs_candidate_is_full_zip_pre_release_not_default_branch():
     assert TAG in publisher
     assert "TAG=v2026.11.1.1" in publisher
     assert "BLOCK: immutable Git tag already exists" in publisher
+    assert "Reject stale release train commits" in publisher
+    assert "github.sha" in publisher
 
 
 def test_live_acceptance_and_backout_are_explicit():
