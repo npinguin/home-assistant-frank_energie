@@ -1,6 +1,6 @@
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
-from datetime import UTC, datetime, timedelta, timezone
+from datetime import UTC, date, datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 from homeassistant.helpers.update_coordinator import UpdateFailed
 from homeassistant.util import dt as dt_util
@@ -2488,8 +2488,6 @@ def test_tomorrow_cache_date_validation_checks_gas_only_and_both_segments() -> N
 
 def _day_prices(day: date, *, segment: str, hours: int | None = None) -> PriceData:
     """Build real timestamped slots for a local day without assuming 24 DST hours."""
-    from zoneinfo import ZoneInfo
-
     zone = ZoneInfo("Europe/Amsterdam")
     start = datetime.combine(day, datetime.min.time(), tzinfo=zone).astimezone(UTC)
     end = datetime.combine(
