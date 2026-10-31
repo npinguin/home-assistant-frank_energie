@@ -26,6 +26,7 @@ from homeassistant.const import (
 )
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryAuthFailed
+from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.update_coordinator import (
     DataUpdateCoordinator,
     UpdateFailed,
@@ -1801,6 +1802,18 @@ class FrankEnergieCoordinator(DataUpdateCoordinator[FrankEnergieData]):
             "serial_number": serial_number,
         }
 
+    def _get_public_api(self) -> FrankEnergie:
+        """Return a credential-free client for public market price queries.
+
+        Never propagate a customer's bearer token to the public GraphQL query.
+        Use the Home Assistant-managed HTTP session; create lazily.
+        """
+        client = getattr(self, "_public_api", None)
+        if client is None:
+            client = FrankEnergie(clientsession=async_get_clientsession(self.hass))
+            self._public_api = client
+        return client
+
     async def _fetch_public_prices_for_range(
         self, start_date: date, end_date: date, country_code: str
     ) -> MarketPrices | None:
@@ -1811,13 +1824,14 @@ class FrankEnergieCoordinator(DataUpdateCoordinator[FrankEnergieData]):
             self.resolution,
         )
 
+        public_api = self._get_public_api()
         try:
             if COUNTRY_USES_SIMPLE_MARKET_PRICES.get(country_code, False):
-                return await self.api.country_prices(
+                return await public_api.country_prices(
                     country_code, start_date, end_date, self.resolution
                 )
 
-            return await self.api.prices(
+            return await public_api.prices(
                 start_date,
                 resolution=self.resolution,
             )
