@@ -10,8 +10,7 @@ from pathlib import Path
 
 WORKFLOW = Path(__file__).resolve().parents[1] / ".github" / "workflows" / "label.yml"
 ACTIVE_PR_ONLY = (
-    "if: github.event_name == 'pull_request_target' "
-    "&& github.event.action != 'closed'"
+    "if: github.event_name == 'pull_request_target' && github.event.action != 'closed'"
 )
 
 
