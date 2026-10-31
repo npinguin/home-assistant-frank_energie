@@ -16,6 +16,36 @@ versioned before live acceptance precisely to obtain new diagnostics.
 The test release publisher is scoped to this single branch and exact-SHA
 CI, HACS/Hassfest and immutable ZIP/checksum verification.
 
+## Governance correction — v2026.11.1.1 (2026-10-31)
+
+**Published HACS prerelease**, immutable tag at
+`dc4af1cd3f829c5072e6c6639e6b5d65f0ce930b`; the published
+`frank_energie.zip` and `SHA256SUMS.txt` remain unchanged.
+
+**Release governance exception:** this test candidate was published via a
+temporary version-specific `publish-consolidated-hacs-test.yml` workflow
+rather than the agreed shared release lifecycle. The independent Ruff job
+encountered a GitHub checkout/network failure; the publisher used its own
+blocking Ruff lint and format checks instead. Python 3.14/3.14.2,
+Quality Scale, Link Check, HACS, Hassfest, deterministic ZIP creation and
+checksum checks passed in that exact-source publisher. Thus **artifact
+validation passed, standardized workflow compliance did not**. Do not
+call this an accepted stable or fully standardized release.
+
+The ad hoc publisher and its release-specific test have been **removed
+from the active PR #18 branch** after publication. They remain in the
+immutable tagged commit for audit. No new release tag is created by this
+reversion, and `main` is not merged.
+
+For **future** test/stable releases, reuse a single reviewed version-neutral
+release workflow and exactly the same mandatory checks for both. A
+failed/unavailable central gate is a blocker requiring diagnosis/rerun;
+do not create release-specific workflows or bypass central requirements.
+Do not publish from `main` until runtime acceptance. PR #18 stays Draft
+until actual BE HA installation, diagnostics, Recorder and rollback are
+validated. New code changes after this tag require a new immutable
+candidate version when next released.
+
 ## Consolidation ledger — no lost fixes
 
 | Historical PR | Change | Delivery in consolidated PR #18 | Legacy PR policy |
