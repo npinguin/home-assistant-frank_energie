@@ -1726,7 +1726,6 @@ def _get_price_resolution_attributes(data: dict) -> dict:
     }
 
 
-
 def _get_user_meter_types_by_segment(data: dict) -> dict[str, str]:
     """Preserve independently reported electricity/gas meter types."""
     user = data.get(DATA_USER)
@@ -1749,7 +1748,6 @@ def _get_primary_user_meter_type(data: dict) -> str | None:
     """Keep existing entity identity; prioritize electricity."""
     types = _get_user_meter_types_by_segment(data)
     return types.get("electricity") or next(iter(types.values()), None)
-
 
 
 SENSOR_TYPES: tuple[FrankEnergieEntityDescription, ...] = (
