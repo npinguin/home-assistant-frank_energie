@@ -9,8 +9,12 @@ tracking and acceptance evidence.
 **Source baseline:** immutable HACS TEST `v2026.10.31.2` at
 `0c6a0bcb056a2e4a555cb5b06d982abbd57f23de`.
 That **tag and ZIP are frozen**, including `v2026.10.31.1`.
-**Main is not promoted** merely because a pre-release exists. The next
-release version is assigned only after release acceptance.
+**Main is not promoted** merely because a pre-release exists. The
+next *stable* version is assigned only after full release acceptance. The
+controlled next HACS **TEST** candidate is `v2026.11.1.1`; this is
+versioned before live acceptance precisely to obtain new diagnostics.
+The test release publisher is scoped to this single branch and exact-SHA
+CI, HACS/Hassfest and immutable ZIP/checksum verification.
 
 ## Consolidation ledger — no lost fixes
 
@@ -77,10 +81,12 @@ delta is proven against the full file tree.
 6. **Live Home Assistant:** actual BE installation checks including diagnostics
    privacy, actual provider source evidence, HA Recorder, HACS install/update
    and rollback. Synthetic green tests are not runtime proof.
-7. **Promotion:** PR #18 is the only merge candidate. Freeze its exact
-   accepted commit, choose a **new version**, publish immutable signed-off
-   test/stable assets as appropriate, and update `main` only after gates.
-   Document rollback, limitations and what was deliberately excluded.
+7. **Promotion:** PR #18 is the only merge candidate. The controlled
+   `v2026.11.1.1` prerelease may be published to gather real HA evidence
+   once exact-SHA CI, HACS/Hassfest and packaging validation pass. Keep #18
+   **Draft** and `main` unchanged until all live acceptance gates pass.
+   For any *subsequent* test or stable release use a **new immutable version**.
+   Document rollback, limitations and excluded functionality.
 
 ## Live BE diagnostics observed from installed 2026.10.31.2
 
