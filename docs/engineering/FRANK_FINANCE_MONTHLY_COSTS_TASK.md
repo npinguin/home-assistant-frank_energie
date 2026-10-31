@@ -1,8 +1,8 @@
 # Engineering task — Frank Energie financial source contract (BE, multi-site)
 
-**Status:** implementation requested; documentation-only draft PR. No production logic changed by this PR.
+**Status (31 October 2026):** first implementation committed to this draft PR. Source-backed current/previous calendar month and expected financial sensors are opt-in; automated CI and live Belgian acceptance are tracked separately. No stable release.
 
-**Base:** `fix/authenticated-public-prices-isolation` (`2026.10.21.2` test candidate). Keep existing open auth/public-price, reconfigure and enum PRs isolated; do not quietly cherry-pick unrelated changes.
+**Base:** synchronized fork `main` (upstream sync PR #8, merge `0799176e`). PR #7 was isolated from the PR #1 public-price patch stack; PRs #1/#4/#5 remain independent. Keep runtime and release work in this draft branch until validation.
 
 ## 1. Goal and decision
 
@@ -127,3 +127,52 @@ Never sum an *estimated* capacity charge into Frank `actual_monthly_cost` unless
 5. Screenshot or compact entity-state proof for an authenticated Belgian electricity+gas installation, redacted.
 
 **Non-goals:** no new Frank integration, no second writer/optimizer for SolarEdge, no redesign of unrelated Mobility/Energy packages, no manually fabricated historical costs, no automatic migration to `archofthings`, no secrets in GitHub.
+
+## 7. Implementation update — 31 October 2026
+
+### Verified source contract (pinned `python-frank-energie==2026.9.20`)
+
+These findings are from the **actual pinned Python client source** at `HiDiHo01/python-frank-energie` tag `v2026.9.20`, not guesses based on a different integration. A live Belgian authenticated response has **not** yet been inspected for this feature.
+
+| Source / query | Client field | Period contract | Our behavior |
+| --- | --- | --- | --- |
+| `periodUsageAndCosts(site, yesterday.isoformat())` | `electricity.costs_total`, `gas.costs_total`, `feed_in.costs_total` | Yesterday, not a monthly total | Existing day sensors unchanged |
+| `monthSummary(site)` | `actualCostsUntilLastMeterReadingDate`, `expectedCosts`, `lastMeterReadingDate` | Provider's summary/expected total, not electricity-gas split | Existing sensors unchanged |
+| `monthInsights(site, "YYYY-MM")` | `electricityDifference.actualCosts/actualUsage` | Calendar month passed in query | New source-backed electricity cost/kWh sensors |
+| Same query | `gasDifference.actualCosts/actualUsage/unit`, `gasExcluded` | Same named calendar month, gas can be absent or delayed | New gas cost and separate kWh/m³ sensors; no conversion |
+| Same query | `feedInDifference.actualCosts/actualUsage` | Same named calendar month | Signed provider feed-in financial balance + kWh; no sign flip |
+| Same query | `expectedCosts`, `expectedCostsElectricity`, `expectedCostsGas`, `expectedCostsFixed`, `expectedCostsFeedIn` | Provider's expected values for requested month | New **expected**, not actual, EUR sensors |
+| Same query | `lastMeterReadingDate`, `meterReadingDayCompleteness` | Source last reading and reported daily completeness | Period and quality attributes, not assumed full-month completeness |
+
+**Source limitations:** `Difference.from_dict` / `MonthInsights.from_dict` in this pinned client use `_safe_float(..., default=0.0)`, so an omitted field can become numeric zero. To avoid fabricating actual usage/cost, new finance sensors **withhold all zero-valued readings** as `zero_unverified_by_client`. This also withholds a legitimate zero — a known limitation requiring a separate Python-client change to preserve field presence. Other invalid/missing values report quality rather than zero. `gasExcluded` always prevents a gas metric. An out-of-period last-meter-reading date also blocks values. No official cash totals or invoice histories are silently replaced.
+
+**Currency:** the client exposes cost amounts as numbers without an explicit currency field. The new cost sensors use EUR consistent with this integration's existing Frank billing sensors; verify on a real BE account. No separate capacity-tariff field was confirmed. No capacity estimates are created here.
+
+### Code delivered in this PR
+
+- `finance.py`: immutable `MonthlyFinanceSnapshot` with explicit month and fetch time; validated source-field selection, Amsterdam calendar bounds, unit gates for kWh versus m³, gas-exclusion gate, non-finite/ambiguous-zero filtering, privacy-safe quality/period attributes.
+- `coordinator.py`: optional current-month and previous-month `month_insights` calls inside **existing per-entry statistics coordinator**; previous month checked at most once per local day per selected site; a failed monthly endpoint cannot break unrelated invoices, daily usage or public prices.
+- `config_flow.py`: new opt-in `monthly_finance_enabled` (default **false**) in authenticated options, avoiding extra API traffic on existing installations.
+- `sensor.py`: 19 new source-backed finance descriptions on the existing Costs service device, enabled only if the group is opted in; month-scoped values are **not** `TOTAL_INCREASING` or automatically registered as HA Energy statistics. Both gas-unit variants default disabled until the user selects the actual API unit. Existing `costs_electricity_this_month` daily-data alias is explicitly **deprecated/unavailable**, not silently reinterpreted; new correct ID is `finance_current_electricity_costs`. Existing entity IDs are preserved.
+- All shipped translations: EN, NL, NL-BE, FR and canonical `strings.json`.
+- Tests: `tests/test_finance.py`, `tests/test_finance_coordinator.py` for period/year transitions, signed amounts, gas excluded, absent versus ambiguous zero, no default API traffic, previous-month throttling and site isolation, translation parity and legacy alias.
+
+### Consumer mapping (source-quality-first)
+
+| Dashboard | Electricity | Gas | Capacity | Total |
+| --- | --- | --- | --- | --- |
+| Previous calendar month | `finance_previous_electricity_costs` | `finance_previous_gas_costs` | Separate verified P1/Fluvius model, **not** this integration | Only sum if the periods/inclusion and components are independently reconciled |
+| Current calendar month | `finance_current_electricity_costs` | `finance_current_gas_costs` | Separate physical peak + tariff | Existing Frank total from `monthSummary`, do not blindly sum |
+| Forecast | `finance_current_expected_electricity` | `finance_current_expected_gas` | Separate local estimate | `finance_current_expected_total`; expected fixed and feed-in available separately |
+
+These are **sensor keys** in the Frank Energie integration, not preassigned Home Assistant `entity_id` strings.
+
+### Deferred — NOT claimed complete
+
+- Field-presence-safe Python client model (especially true zero), signed feed-in interpretation against a BE contract and actual unit/currency confirmation.
+- Complete gas-delay and historical period correction lifecycle; strict confirmation of `lastMeterReadingDate` within each period on live data.
+- Optional backfilled Recorder statistics and HA Energy dashboard integration with revision handling; **none** are written by this PR.
+- One complete Belgian electricity+gas month, real account reconciliation, site-switch/reauth validation and actual screenshot proof.
+- Formal stable release and downstream production rollout.
+
+**Release gate:** Keep PR draft and do not merge or tag until exact-head tests, HACS/Hassfest validation and sanitized live BE financial source acceptance succeed. The first implementation exposes conservative, incomplete-month **snapshots**, not fabricated monthly invoices or official capacity-charge estimates.
