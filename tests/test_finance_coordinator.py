@@ -3,6 +3,7 @@
 from datetime import datetime
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, call
+from zoneinfo import ZoneInfo
 
 import pytest
 
@@ -64,7 +65,7 @@ async def test_monthly_insights_current_and_previous_are_site_scoped_and_throttl
     first = await coordinator._async_update_data()
     assert isinstance(first[DATA_MONTH_INSIGHTS_CURRENT], MonthlyFinanceSnapshot)
     assert isinstance(first[DATA_MONTH_INSIGHTS_PREVIOUS], MonthlyFinanceSnapshot)
-    current, previous = month_keys(datetime.now().astimezone().date())
+    current, previous = month_keys(datetime.now(ZoneInfo("Europe/Amsterdam")).date())
     assert {
         x.month
         for x in (
