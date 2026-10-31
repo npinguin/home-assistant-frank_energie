@@ -900,18 +900,20 @@ class FrankEnergieCoordinator(DataUpdateCoordinator[FrankEnergieData]):
             self.cached_prices_tomorrow = prices_tomorrow
             self.last_fetch_tomorrow = now_utc
 
-            entry_title = self.config_entry.title or "no title"
-            if self.config_entry is not None:
+            # A partial day is deliberately retried. Do not emit another
+            # "available" event at every retry of the same local day.
+            if self.config_entry is not None and not self._tomorrow_prices_logged:
                 self.hass.bus.async_fire(
                     EVENT_FRANK_ENERGIE,
                     {
                         "entry_id": self.config_entry.entry_id,
-                        "entry_title": entry_title,
+                        "entry_title": self.config_entry.title or "no title",
                         "action": "tomorrow_prices_available",
                         "date": tomorrow.isoformat(),
                         "resolution": self.resolution,
                     },
                 )
+                self._tomorrow_prices_logged = True
         else:
             _LOGGER.debug("Tomorrow prices not yet available, retrying on next refresh")
 
