@@ -109,6 +109,7 @@ from .const import (
     TIMEZONE_AMSTERDAM,
     TOMORROW_PUBLICATION_HOUR_LOCAL,
 )
+from .diagnostic_trace import DiagnosticTrace, attach_graphql_trace
 from .finance import MonthlyFinanceSnapshot, month_keys
 from .helpers import decrypt_password, price_cache_store
 from .mutation_queue import MutationQueue
@@ -456,6 +457,9 @@ class FrankEnergieCoordinator(DataUpdateCoordinator[FrankEnergieData]):
         self.hass = hass
         self.config_entry = config_entry
         self.api = api
+        self._diagnostic_trace = getattr(
+            api, "_frank_diagnostic_trace", DiagnosticTrace()
+        )
         self._today_prices_logged: bool = False
         self._tomorrow_prices_logged: bool = False
         self._cache: dict[str, object] = {}  # <--- hier cache je prijzen
@@ -500,6 +504,25 @@ class FrankEnergieCoordinator(DataUpdateCoordinator[FrankEnergieData]):
         # None = not yet checked; True/False = confirmed this session.
         # Reset to None daily so PV ownership is re-probed in case of new installation.
         self._has_pv_systems: bool | None = None
+
+    def _record_price_fetch(
+        self,
+        source: str,
+        outcome: str,
+        period: date,
+        prices: MarketPrices | None = None,
+        error: BaseException | None = None,
+    ) -> None:
+        """Record post-parsing source coverage alongside real GraphQL evidence."""
+        electricity_slots, gas_slots = _price_counts(prices)
+        self._diagnostic_trace.record(
+            source,
+            outcome,
+            period=period,
+            electricity_slots=electricity_slots if prices is not None else None,
+            gas_slots=gas_slots if prices is not None else None,
+            error=error,
+        )
 
     @staticmethod
     def _get_shared_auth_lock(api: FrankEnergie) -> asyncio.Lock:
@@ -1811,6 +1834,7 @@ class FrankEnergieCoordinator(DataUpdateCoordinator[FrankEnergieData]):
         client = getattr(self, "_public_api", None)
         if client is None:
             client = FrankEnergie(clientsession=async_get_clientsession(self.hass))
+            attach_graphql_trace(client, self._diagnostic_trace, "graphql_public")
             self._public_api = client
         return client
 
@@ -1827,14 +1851,21 @@ class FrankEnergieCoordinator(DataUpdateCoordinator[FrankEnergieData]):
         public_api = self._get_public_api()
         try:
             if COUNTRY_USES_SIMPLE_MARKET_PRICES.get(country_code, False):
-                return await public_api.country_prices(
+                prices = await public_api.country_prices(
                     country_code, start_date, end_date, self.resolution
                 )
-
-            return await public_api.prices(
+            else:
+                prices = await public_api.prices(
+                    start_date,
+                    resolution=self.resolution,
+                )
+            self._record_price_fetch(
+                "public_market",
+                "present" if any(_price_counts(prices)) else "empty",
                 start_date,
-                resolution=self.resolution,
+                prices,
             )
+            return prices
 
         except RequestException as ex:
             if not _is_no_market_prices_error(ex):
@@ -1845,10 +1876,12 @@ class FrankEnergieCoordinator(DataUpdateCoordinator[FrankEnergieData]):
                 start_date,
                 end_date,
             )
+            self._record_price_fetch("public_market", "not_published", start_date, error=ex)
             return None
 
         except NetworkError as err:
-            _LOGGER.warning("Failed to fetch public prices: %s", err)
+            _LOGGER.warning("Failed to fetch public prices (%s)", type(err).__name__)
+            self._record_price_fetch("public_market", "network_error", start_date, error=err)
             return None
 
     async def _fetch_user_prices_for_range(
@@ -1862,6 +1895,7 @@ class FrankEnergieCoordinator(DataUpdateCoordinator[FrankEnergieData]):
             _LOGGER.debug(
                 "Skipping user prices fetch because the client is not authenticated"
             )
+            self._record_price_fetch("customer_tariff", "skipped_unauthenticated", start_date)
             return None
 
         site_reference = self.site_reference
@@ -1869,24 +1903,31 @@ class FrankEnergieCoordinator(DataUpdateCoordinator[FrankEnergieData]):
             _LOGGER.debug(
                 "Skipping user prices fetch because site_reference is not set"
             )
+            self._record_price_fetch("customer_tariff", "skipped_missing_site", start_date)
             return None
 
         user_country = self._user_country or default_country
 
         _LOGGER.debug(
-            "Fetching user prices for site_reference=%s country=%s resolution=%s",
-            site_reference,
+            "Fetching user prices for country=%s resolution=%s",
             user_country,
             self.resolution,
         )
 
         try:
-            return await self.api.user_prices(
+            prices = await self.api.user_prices(
                 site_reference,
                 user_country,
                 start_date,
                 end_date,
             )
+            self._record_price_fetch(
+                "customer_tariff",
+                "present" if any(_price_counts(prices)) else "empty",
+                start_date,
+                prices,
+            )
+            return prices
 
         except RequestException as ex:
             if not _is_no_market_prices_error(ex):
@@ -1897,10 +1938,12 @@ class FrankEnergieCoordinator(DataUpdateCoordinator[FrankEnergieData]):
                 start_date,
                 end_date,
             )
+            self._record_price_fetch("customer_tariff", "not_published", start_date, error=ex)
             return None
 
         except NetworkError as err:
-            _LOGGER.warning("Failed to fetch user prices: %s", err)
+            _LOGGER.warning("Failed to fetch user prices (%s)", type(err).__name__)
+            self._record_price_fetch("customer_tariff", "network_error", start_date, error=err)
             return None
 
     async def _fetch_prices_with_fallback(
