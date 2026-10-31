@@ -14,6 +14,7 @@ import pytest
 
 from custom_components.frank_energie.diagnostics import (
     _safe_contract_capabilities,
+    _safe_ha_entity_state_summary,
     _safe_price_coverage,
     _safe_provider_data_freshness,
     _serialize,
@@ -637,3 +638,61 @@ def test_provider_data_freshness_handles_missing_dates_without_guessing() -> Non
     assert result["invoices"]["latest_invoice_start_age_days"] is None
     assert result["usage"]["segments"]["gas"]["present"] is False
     assert "invalid-private" not in str(result)
+
+
+def test_ha_entity_state_summary_counts_loaded_missing_and_disabled(
+    hass, monkeypatch
+) -> None:
+    """HA entity-state evidence is separate from provider API success."""
+    from homeassistant.helpers import entity_registry as er
+
+    hass.states.async_set("sensor.frank_one", "1")
+    hass.states.async_set("sensor.frank_two", "unavailable")
+    hass.states.async_set("sensor.frank_three", "unknown")
+
+    fake_entities = [
+        SimpleNamespace(
+            config_entry_id="selected-entry",
+            entity_id=entity_id,
+            disabled_by=disabled,
+        )
+        for entity_id, disabled in (
+            ("sensor.frank_one", None),
+            ("sensor.frank_two", None),
+            ("sensor.frank_three", None),
+            ("sensor.frank_missing", None),
+            ("sensor.frank_disabled", "user"),
+        )
+    ]
+    fake_entities.append(
+        SimpleNamespace(
+            config_entry_id="other-entry",
+            entity_id="sensor.some_other_integration",
+            disabled_by=None,
+        )
+    )
+    monkeypatch.setattr(
+        er,
+        "async_get",
+        lambda _: SimpleNamespace(
+            entities={f"key{i}": entity for i, entity in enumerate(fake_entities)}
+        ),
+    )
+    result = _safe_ha_entity_state_summary(
+        hass, SimpleNamespace(entry_id="selected-entry")
+    )
+    assert result["registered"] == 5
+    assert result["disabled"] == 1
+    assert result["not_loaded"] == 1
+    assert result["available"] == 1
+    assert result["unavailable"] == 1
+    assert result["unknown"] == 1
+    assert result["not_reported_in_90_minutes"] == 0
+    assert "frank_one" not in str(result)
+
+
+def test_ha_entity_state_summary_never_infers_from_fake_hass() -> None:
+    """A mock object is not an actual loaded HA entity registry."""
+    assert _safe_ha_entity_state_summary(
+        MagicMock(), SimpleNamespace(entry_id="redacted-entry")
+    ) == {"configured": False}
