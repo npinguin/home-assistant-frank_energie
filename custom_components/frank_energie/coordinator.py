@@ -453,7 +453,8 @@ class FrankEnergieCoordinator(DataUpdateCoordinator[FrankEnergieData]):
         self._country_code: str | None = self.hass.config.country
         self.hass_country_code: str | None = self.hass.config.country
         self._user_country: str | None = self.country_code
-        self._connection_id: str | None = None  # cache voor contractPriceResolutionState
+        # Cached electricity connection ID for contractPriceResolutionState.
+        self._connection_id: str | None = None
         self._api_resolution_state: ContractPriceResolutionState | None = None
         self._resolution_change_pending: bool = False
         self.enode_chargers: EnodeChargers | None = None
@@ -1064,7 +1065,9 @@ class FrankEnergieCoordinator(DataUpdateCoordinator[FrankEnergieData]):
                         self._country_code = country_code
             if not self._connection_id:
                 self._connection_id = _extract_electricity_connection_id(user_data)
-                _LOGGER.debug("Extracted electricity connection ID: %s", self._connection_id)
+                _LOGGER.debug(
+                    "Extracted electricity connection ID: %s", self._connection_id
+                )
 
             return user_data
         except AuthException as ex:
@@ -2104,7 +2107,7 @@ class FrankEnergieCoordinator(DataUpdateCoordinator[FrankEnergieData]):
         lowest_end: Price | None = None
 
         for index in range(len(prices) - window + 1):
-            window_prices = prices[index: index + window]
+            window_prices = prices[index : index + window]
 
             avg_price = sum(price.total for price in window_prices) / window
 
@@ -2286,7 +2289,13 @@ class FrankEnergieCoordinator(DataUpdateCoordinator[FrankEnergieData]):
 
         configured = self.config_entry.options.get("resolution", DEFAULT_RESOLUTION)
 
-        if self._api_resolution_state is not None:  # and not self._resolution_change_pending:
+        # An anonymous entry uses its own configured interval. During a pending
+        # change, use the selected option until the account API confirms it.
+        if (
+            self.api.is_authenticated
+            and not self._resolution_change_pending
+            and self._api_resolution_state is not None
+        ):
             active = self._api_resolution_state.activeOption
             if active in SUPPORTED_RESOLUTIONS:
                 return active
@@ -2300,8 +2309,7 @@ class FrankEnergieCoordinator(DataUpdateCoordinator[FrankEnergieData]):
             return configured
 
         _LOGGER.debug(
-            "Unsupported configured price resolution %r; "
-            "falling back to %s",
+            "Unsupported configured price resolution %r; falling back to %s",
             configured,
             DEFAULT_RESOLUTION,
         )
@@ -2557,7 +2565,7 @@ class FrankEnergiePriceCoordinator(FrankEnergieCoordinator):
         return False
 
     def _is_cache_resolution_valid(self) -> bool:
-        """Check if the cached resolution matches the configured resolution."""
+        """Check whether cached price intervals match the effective query resolution."""
         if not self._static_prices_today or not self.config_entry:
             return True
 
@@ -2568,8 +2576,7 @@ class FrankEnergiePriceCoordinator(FrankEnergieCoordinator):
             return True
 
         cached_res = price_series.resolution_minutes
-        config_value = self.config_entry.options.get("resolution", DEFAULT_RESOLUTION)
-        expected_res = 15 if config_value == "PT15M" else 60
+        expected_res = 15 if self.resolution == "PT15M" else 60
 
         if cached_res != expected_res:
             _LOGGER.debug(
