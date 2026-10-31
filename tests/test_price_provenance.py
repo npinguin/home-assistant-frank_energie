@@ -35,8 +35,15 @@ def _prices(electricity: bool = False, gas: bool = False) -> MarketPrices:
 
 
 @pytest.mark.parametrize(
-    ("selected_electricity", "selected_gas", "customer_electricity",
-     "customer_gas", "authenticated", "cached", "expected"),
+    (
+        "selected_electricity",
+        "selected_gas",
+        "customer_electricity",
+        "customer_gas",
+        "authenticated",
+        "cached",
+        "expected",
+    ),
     [
         (False, False, False, False, True, False, "not_available"),
         (False, False, False, False, False, False, "not_available"),
@@ -59,13 +66,16 @@ def test_selected_slot_provenance_is_not_a_success_flag(
     expected,
 ):
     selected = _prices(selected_electricity, selected_gas)
-    assert _price_selection_outcome(
-        selected,
-        authenticated=authenticated,
-        customer_electricity=customer_electricity,
-        customer_gas=customer_gas,
-        fallback_from_cache=cached,
-    ) == expected
+    assert (
+        _price_selection_outcome(
+            selected,
+            authenticated=authenticated,
+            customer_electricity=customer_electricity,
+            customer_gas=customer_gas,
+            fallback_from_cache=cached,
+        )
+        == expected
+    )
 
 
 def _coordinator(authenticated: bool = True) -> FrankEnergiePriceCoordinator:
@@ -116,9 +126,7 @@ async def test_both_sources_empty_cannot_be_mislabeled_as_fallback():
 @pytest.mark.asyncio
 async def test_partial_customer_no_public_slots_stays_customer_not_mixed():
     coordinator = _coordinator()
-    coordinator._fetch_public_prices_for_range = AsyncMock(
-        return_value=_prices()
-    )
+    coordinator._fetch_public_prices_for_range = AsyncMock(return_value=_prices())
     coordinator._fetch_user_prices_for_range = AsyncMock(
         return_value=_prices(electricity=True)
     )
