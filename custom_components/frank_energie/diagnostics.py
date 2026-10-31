@@ -128,6 +128,57 @@ def _serialize(value: object) -> object:
     return value
 
 
+
+def _bounded_coordinator_evidence(coordinator: object | None) -> dict[str, object]:
+    """Expose coordinator liveness and coverage, never its customer payload."""
+    if coordinator is None:
+        return {"configured": False}
+    data = getattr(coordinator, "data", None)
+    return {
+        "configured": True,
+        "last_update_success": getattr(coordinator, "last_update_success", None),
+        "update_interval": str(getattr(coordinator, "update_interval", None)),
+        "has_data": bool(data),
+    }
+
+
+def _safe_price_coverage(data: object) -> dict[str, object]:
+    """Report empty price streams without serializing values or account data."""
+    if not isinstance(data, dict):
+        return {}
+    coverage: dict[str, object] = {}
+    for segment in ("electricity", "gas"):
+        source = data.get(segment)
+        if source is None:
+            coverage[segment] = {"available": False}
+            continue
+        prices = getattr(source, "prices", None)
+        coverage[segment] = {
+            "available": True,
+            "price_points": len(prices) if isinstance(prices, (list, tuple)) else None,
+            "resolution_minutes": getattr(source, "resolution_minutes", None),
+        }
+    return coverage
+
+
+def _safe_finance_coverage(data: object) -> dict[str, object]:
+    """Report separate finance freshness without publishing private amounts."""
+    if not isinstance(data, dict):
+        return {}
+    keys = (
+        "month_summary",
+        "invoices",
+        "usage",
+        "month_insights_current",
+        "month_insights_previous",
+    )
+    result: dict[str, object] = {}
+    for key in keys:
+        snapshot = data.get(key)
+        result[key] = snapshot is not None
+    return result
+
+
 async def async_get_config_entry_diagnostics(
     hass: HomeAssistant,
     entry: ConfigEntry,
@@ -170,6 +221,23 @@ async def async_get_config_entry_diagnostics(
         "battery_session_coordinators": len(
             runtime_data.battery_session_coordinators,
         ),
+        # Explicit cross-coordinator evidence: a healthy price coordinator
+        # cannot be used to infer invoice, metering or monthly-finance health.
+        "coordinator_evidence": {
+            "price": _bounded_coordinator_evidence(
+                getattr(runtime_data, "price_coordinator", None)
+            ),
+            "settings": _bounded_coordinator_evidence(
+                getattr(runtime_data, "settings_coordinator", None)
+            ),
+            "statistics": _bounded_coordinator_evidence(
+                getattr(runtime_data, "statistics_coordinator", None)
+            ),
+            "price_coverage": _safe_price_coverage(coordinator.data),
+            "finance_coverage": _safe_finance_coverage(
+                getattr(getattr(runtime_data, "statistics_coordinator", None), "data", None)
+            ),
+        },
     }
 
     return async_redact_data(diagnostics, TO_REDACT)
