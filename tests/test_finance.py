@@ -146,7 +146,10 @@ def test_valid_zero_is_conservatively_withheld_until_client_contract_improves():
 
 @pytest.mark.parametrize("value", [float("nan"), float("inf"), -float("inf"), True])
 def test_invalid_numeric_amounts_are_never_published(value):
-    assert finance_reading(_snapshot(electricity_cost=value), "electricity_costs")[0] is None
+    assert (
+        finance_reading(_snapshot(electricity_cost=value), "electricity_costs")[0]
+        is None
+    )
 
 
 def test_attributes_have_period_quality_and_no_site_or_invoice_identifiers():
