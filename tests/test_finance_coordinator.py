@@ -86,6 +86,54 @@ async def test_monthly_insights_current_and_previous_are_site_scoped_and_throttl
 
 
 @pytest.mark.asyncio
+async def test_previous_month_missing_response_retries_then_caches_success():
+    """An API gap cannot make last month's finance unavailable all day."""
+    coordinator, _, api = _statistics_coordinator(enabled=True)
+    _, previous = month_keys(datetime.now(ZoneInfo("Europe/Amsterdam")).date())
+    attempts = 0
+
+    async def month_response(_site: str, period: str):
+        nonlocal attempts
+        if period == previous:
+            attempts += 1
+            if attempts == 1:
+                return None
+        return SimpleNamespace(lastMeterReadingDate=datetime.now().astimezone())
+
+    api.month_insights.side_effect = month_response
+    first = await coordinator._async_update_data()
+    assert first[DATA_MONTH_INSIGHTS_PREVIOUS] is None
+
+    second = await coordinator._async_update_data()
+    assert isinstance(second[DATA_MONTH_INSIGHTS_PREVIOUS], MonthlyFinanceSnapshot)
+
+    await coordinator._async_update_data()
+    assert attempts == 2  # cached only after the successful source read
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "source_error",
+    [
+        ValueError("Invalid lastMeterReadingDate"),
+        TypeError("Incomplete monthly response"),
+        TimeoutError("Monthly endpoint timed out"),
+    ],
+)
+async def test_monthly_parser_errors_do_not_disable_daily_statistics(source_error):
+    """Optional monthInsights errors must not break yesterday or invoices."""
+    coordinator, _, api = _statistics_coordinator(enabled=True)
+    api.month_insights.side_effect = source_error
+
+    result = await coordinator._async_update_data()
+    assert result[DATA_MONTH_INSIGHTS_CURRENT] is None
+    assert result[DATA_MONTH_INSIGHTS_PREVIOUS] is None
+    coordinator._fetch_period_usage.assert_awaited_once()
+    coordinator._fetch_month_summary.assert_awaited_once()
+    coordinator._fetch_invoices.assert_awaited_once()
+
+
+@pytest.mark.asyncio
 async def test_monthly_failure_does_not_disable_unrelated_statistics():
     coordinator, _, api = _statistics_coordinator(enabled=True)
     api.month_insights.side_effect = FrankEnergieException("API unavailable")
