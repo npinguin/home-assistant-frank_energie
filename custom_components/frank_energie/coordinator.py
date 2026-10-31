@@ -2893,6 +2893,13 @@ class FrankEnergiePriceCoordinator(FrankEnergieCoordinator):
 
     async def async_config_entry_first_refresh(self) -> None:
         """Perform first refresh."""
+        # Cache completeness is site-specific. Resolve subscribed segments
+        # before deciding whether a cached partial day can skip the first
+        # live refresh; _async_update_data has not executed yet on this path.
+        self.user_electricity_enabled, self.user_gas_enabled = _site_segment_flags(
+            (self.settings_coordinator.data or {}).get(DATA_USER_SITES),
+            self.site_reference,
+        )
         cached_data_loaded = await self._async_setup()
         now_utc = dt_util.utcnow()
 
