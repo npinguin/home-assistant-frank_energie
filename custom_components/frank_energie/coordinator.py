@@ -1989,6 +1989,9 @@ class FrankEnergieCoordinator(DataUpdateCoordinator[FrankEnergieData]):
                 _LOGGER.debug(
                     "No public prices available yet, skipping fallback to cached prices"
                 )
+                self._record_price_fetch(
+                    "price_selection", "not_available", start_date
+                )
                 return None
             public_prices = getattr(
                 self,
@@ -2001,6 +2004,9 @@ class FrankEnergieCoordinator(DataUpdateCoordinator[FrankEnergieData]):
             )
 
         if not self.api.is_authenticated:
+            self._record_price_fetch(
+                "price_selection", "public", start_date, public_prices
+            )
             return public_prices
 
         if user_prices is None:
@@ -2009,6 +2015,9 @@ class FrankEnergieCoordinator(DataUpdateCoordinator[FrankEnergieData]):
                 return None
             _LOGGER.warning(
                 "Failed to fetch user prices, falling back to public prices"
+            )
+            self._record_price_fetch(
+                "price_selection", "public_fallback", start_date, public_prices
             )
             return public_prices
 
@@ -2020,6 +2029,9 @@ class FrankEnergieCoordinator(DataUpdateCoordinator[FrankEnergieData]):
 
         if has_electricity and has_gas:
             self._cached_prices = user_prices
+            self._record_price_fetch(
+                "price_selection", "customer", start_date, user_prices
+            )
             return user_prices
 
         # No fallback for tomorrow — return what we have
@@ -2028,6 +2040,9 @@ class FrankEnergieCoordinator(DataUpdateCoordinator[FrankEnergieData]):
                 "No complete user prices for tomorrow (electricity=%s gas=%s), skipping fallback",
                 bool(has_electricity),
                 bool(has_gas),
+            )
+            self._record_price_fetch(
+                "price_selection", "customer", start_date, user_prices
             )
             return user_prices
 
@@ -2049,6 +2064,15 @@ class FrankEnergieCoordinator(DataUpdateCoordinator[FrankEnergieData]):
             )
 
         self._cached_prices = user_prices
+        outcome = (
+            "mixed"
+            if (not has_gas and self.user_gas_enabled)
+            or (not has_electricity and self.user_electricity_enabled)
+            else "customer"
+        )
+        self._record_price_fetch(
+            "price_selection", outcome, start_date, user_prices
+        )
         return user_prices
 
     async def _handle_fetch_exceptions(self, ex: Exception) -> None:
