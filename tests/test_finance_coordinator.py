@@ -35,9 +35,11 @@ def _statistics_coordinator(*, enabled: bool, site: str = "SITE_A"):
     entry.data = {"site_reference": site}
     api = MagicMock()
     api.is_authenticated = True
-    api.month_insights = AsyncMock(return_value=SimpleNamespace(
-        lastMeterReadingDate=datetime.now().astimezone(),
-    ))
+    api.month_insights = AsyncMock(
+        return_value=SimpleNamespace(
+            lastMeterReadingDate=datetime.now().astimezone(),
+        )
+    )
     settings = SimpleNamespace(data={})
     c = FrankEnergieStatisticsCoordinator(hass, entry, api, settings)
     c._should_skip_api_calls = MagicMock(return_value=False)
@@ -63,10 +65,13 @@ async def test_monthly_insights_current_and_previous_are_site_scoped_and_throttl
     assert isinstance(first[DATA_MONTH_INSIGHTS_CURRENT], MonthlyFinanceSnapshot)
     assert isinstance(first[DATA_MONTH_INSIGHTS_PREVIOUS], MonthlyFinanceSnapshot)
     current, previous = month_keys(datetime.now().astimezone().date())
-    assert {x.month for x in (
-        first[DATA_MONTH_INSIGHTS_CURRENT],
-        first[DATA_MONTH_INSIGHTS_PREVIOUS],
-    )} == {current, previous}
+    assert {
+        x.month
+        for x in (
+            first[DATA_MONTH_INSIGHTS_CURRENT],
+            first[DATA_MONTH_INSIGHTS_PREVIOUS],
+        )
+    } == {current, previous}
 
     await coordinator._async_update_data()
     assert api.month_insights.await_count == 3  # current twice, previous once
@@ -101,9 +106,7 @@ async def test_anonymous_entry_never_calls_monthly_api():
 def test_monthly_description_is_opt_in_and_legacy_daily_alias_never_reused():
     from custom_components.frank_energie import const
 
-    data = {DATA_USAGE: SimpleNamespace(
-        electricity=SimpleNamespace(costs_total=14.50)
-    )}
+    data = {DATA_USAGE: SimpleNamespace(electricity=SimpleNamespace(costs_total=14.50))}
     yesterday = next(d for d in SENSOR_TYPES if d.key == "costs_electricity_yesterday")
     legacy = next(d for d in SENSOR_TYPES if d.key == "costs_electricity_this_month")
     assert yesterday.value_fn(data) == 14.50
@@ -123,10 +126,17 @@ def test_all_monthly_keys_translated_in_all_shipped_locales():
     import json
     from pathlib import Path
 
-    root = Path(__file__).resolve().parent.parent / "custom_components" / "frank_energie"
+    root = (
+        Path(__file__).resolve().parent.parent / "custom_components" / "frank_energie"
+    )
     keys = {d.translation_key for d in _monthly_finance_descriptions()}
-    for lang in ("strings.json", "translations/en.json", "translations/nl.json",
-                 "translations/nl-BE.json", "translations/fr.json"):
+    for lang in (
+        "strings.json",
+        "translations/en.json",
+        "translations/nl.json",
+        "translations/nl-BE.json",
+        "translations/fr.json",
+    ):
         content = json.loads((root / lang).read_text(encoding="utf-8"))
         assert keys <= content["entity"]["sensor"].keys(), lang
         assert "monthly_finance_enabled" in content["options"]["step"]["user"]["data"]
