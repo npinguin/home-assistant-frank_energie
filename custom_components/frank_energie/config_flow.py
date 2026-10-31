@@ -149,11 +149,7 @@ class ConfigFlow(config_entries.ConfigFlow):
             return await self._handle_authentication_failure(reason="connection_error")
         except Exception as ex:
             # Catch-all for unexpected errors
-            _LOGGER.exception(
-                "Unexpected error during login for user %s: %s",
-                user_input.get(CONF_USERNAME, "UNKNOWN"),
-                ex,
-            )
+            _LOGGER.exception("Unexpected error during Frank Energie login")
             return await self._handle_authentication_failure(reason="unknown_error")
 
     async def async_step_site(
@@ -182,7 +178,7 @@ class ConfigFlow(config_entries.ConfigFlow):
                 refresh_token=self.sign_in_data.get(CONF_TOKEN, None),
             ) as api:
                 user_sites = await api.UserSites()
-                _LOGGER.debug("All user_sites: %s", user_sites)
+                # Account/site objects include private addresses and identifiers.
 
                 # Check if the user has any delivery sites
                 if not user_sites or not user_sites.deliverySites:
@@ -197,7 +193,7 @@ class ConfigFlow(config_entries.ConfigFlow):
                 )
                 for i, site in enumerate(user_sites.deliverySites):
                     status = getattr(site, "status", "NO_STATUS")
-                    _LOGGER.debug("Site %d: status=%s, site=%s", i, status, site)
+                    _LOGGER.debug("Site %d: status=%s", i, status)
 
                 # Get all sites that have a status attribute
                 all_delivery_sites = [
@@ -680,18 +676,14 @@ class ConfigFlow(config_entries.ConfigFlow):
                     user_input[CONF_USERNAME], user_input[CONF_PASSWORD]
                 )
             except AuthException:
-                _LOGGER.warning(
-                    "Authentication failed for user %s", user_input[CONF_USERNAME]
-                )
+                _LOGGER.warning("Frank Energie authentication failed")
                 # Trigger login flow with friendly error
                 raise AuthException("invalid_auth")
             except ConnectionException:
-                _LOGGER.error("Connection error for user %s", user_input[CONF_USERNAME])
+                _LOGGER.error("Frank Energie authentication connection error")
                 raise ConnectionException("connection_error")
             except Exception as ex:
-                _LOGGER.exception(
-                    "Unexpected error for user %s: %s", user_input[CONF_USERNAME], ex
-                )
+                _LOGGER.exception("Unexpected Frank Energie authentication error")
                 raise RuntimeError("unknown_error") from ex
 
     async def _handle_authentication_success(
@@ -746,14 +738,9 @@ class ConfigFlow(config_entries.ConfigFlow):
         config_entry: config_entries.ConfigEntry,
     ) -> Optional[config_entries.OptionsFlow]:
         """Get options flow handler only if a site is selected."""
-        _LOGGER.debug("config_entry for %s", config_entry)
         entry_data = config_entry.data
         if CONF_SITE in entry_data:
-            _LOGGER.debug(
-                "Site %s is selected, providing options flow: %s",
-                entry_data[CONF_SITE],
-                entry_data,
-            )
+            _LOGGER.debug("Delivery site configured; enabling options flow")
             return FrankEnergieOptionsFlowHandler(entry_data)
 
         _LOGGER.debug("No site selected, no options flow available.")
