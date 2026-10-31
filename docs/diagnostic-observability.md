@@ -7,8 +7,8 @@ setup; its records are in memory until restart, bounded to 96 entries.
 
 ## How to collect evidence in Home Assistant
 
-1. Install a future HACS test build **containing this PR**. The already
-   released `v2026.10.31.1` does **not** contain this enhancement.
+1. Install HACS test release `v2026.10.31.2` or a later test build.
+   The earlier `v2026.10.31.1` does **not** contain the GraphQL tracer.
 2. Restart Home Assistant or reload the Frank Energie integration. Observe
    its normal update cycle; no developer-mode setting is required.
 3. Go to **Settings → Devices & services → Frank Energie → ⋮ → Download diagnostics**.
@@ -49,6 +49,27 @@ be returned with HTTP success and are reported separately.
 digital gas meter is user-confirmed independently of those codes. The
 integration must not represent spot-market prices as a variable customer's
 contractual unit rate.
+
+## Price selection outcomes and trust boundary
+
+The source-selection diagnostic must describe **actual selected price slots**,
+not the HTTP/GraphQL success flag:
+
+- `customer`: selected slots came from authenticated customer data.
+- `public`: selected slots came from the independent anonymous market feed.
+- `public_fallback`: market slots filled missing customer slots; these are
+  **not** verified contractual prices for a Belgian `MODEL` variable contract.
+- `mixed`: some selected slots are customer values and others are fallback.
+- `cached_fallback`: a previously cached value was used; do not claim it was
+  fetched from today's public GraphQL response.
+- `not_available`: no selected electricity or gas slots exist. An API poll
+  returning successfully does not change this quality.
+
+This classification is diagnostic metadata; it does **not** alter the existing
+price entity IDs, states, Recorder history or market-price fallback behavior.
+In particular, a public spot price must never be used as evidence of the
+actual invoiced MODEL tariff. Actual finance requires a separate proven
+provider billing contract and the upstream missing-vs-zero fix (issue #11).
 
 ## Privacy and debug logging
 
