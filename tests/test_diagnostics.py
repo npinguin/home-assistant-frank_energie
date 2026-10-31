@@ -192,15 +192,16 @@ async def test_diagnostics_redacts_sensitive_data() -> None:
         entry,
     )
 
-    assert diagnostics["entry"]["data"]["username"] == "**REDACTED**"
-    assert diagnostics["entry"]["data"]["password"] == "**REDACTED**"
-    assert diagnostics["entry"]["data"]["access_token"] == "**REDACTED**"
-    assert diagnostics["entry"]["data"]["site_reference"] == "**REDACTED**"
-
-    assert diagnostics["data"]["email"] == "**REDACTED**"
-    assert diagnostics["data"]["ean"] == "**REDACTED**"
-
-    assert diagnostics["data"]["safe"] == "value"
+    assert diagnostics["entry"]["data"] == {
+        "configured": True,
+        "site_selected": True,
+    }
+    assert diagnostics["entry"]["options"]["monthly_finance_enabled"] is False
+    assert diagnostics["raw_provider_payloads"] == "omitted_for_privacy"
+    assert "user@example.com" not in str(diagnostics)
+    assert "test@example.com" not in str(diagnostics)
+    assert "871234567890123456" not in str(diagnostics)
+    assert "secret-site" not in str(diagnostics)
 
 
 @pytest.mark.asyncio
