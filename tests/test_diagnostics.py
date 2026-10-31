@@ -538,11 +538,15 @@ def test_price_coverage_splits_actual_selected_slots_by_local_day() -> None:
     """A 30-slot stream can conceal 24 today plus only 6 tomorrow."""
     gas = SimpleNamespace(
         all=[
-            SimpleNamespace(date_from=datetime.fromisoformat("2026-10-31T12:00:00+01:00"))
+            SimpleNamespace(
+                date_from=datetime.fromisoformat("2026-10-31T12:00:00+01:00")
+            )
             for _ in range(24)
         ]
         + [
-            SimpleNamespace(date_from=datetime.fromisoformat("2026-11-01T12:00:00+01:00"))
+            SimpleNamespace(
+                date_from=datetime.fromisoformat("2026-11-01T12:00:00+01:00")
+            )
             for _ in range(6)
         ],
         prices=[],
