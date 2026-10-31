@@ -50,6 +50,8 @@ def test_hacs_candidate_is_full_zip_pre_release_not_default_branch():
     assert "action_required)$'; then" in publisher
     assert publisher.count("\njobs:\n") == 1
     assert len(publisher.splitlines()) < 260
+    assert "Pinned Ruff lint again on exact candidate" in publisher
+    assert "Pinned Ruff format again on exact candidate" in publisher
 
 
 def test_live_acceptance_and_backout_are_explicit():
