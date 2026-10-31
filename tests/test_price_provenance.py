@@ -254,6 +254,7 @@ def test_actual_pinned_user_sites_parser_preserves_selected_site_isolation():
     assert _site_segment_flags(sites, "site-b") == (False, True)
     assert _site_segment_flags(sites, "missing-site") == (False, False)
 
+
 @pytest.mark.asyncio
 async def test_cached_first_refresh_checks_selected_site_before_skipping_api() -> None:
     """A partial cache cannot hide a subscribed gas segment at startup."""
