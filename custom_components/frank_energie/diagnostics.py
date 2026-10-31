@@ -163,10 +163,25 @@ def _safe_price_coverage(data: object) -> dict[str, object]:
         if source is None:
             coverage[segment] = {"available": False}
             continue
-        prices = getattr(source, "prices", None)
+        # PriceData.prices contains raw *input* dicts, but PriceData.__add__
+        # deliberately builds a new instance with prices=[] and populates
+        # price_data. All live HA price sensors consume PriceData.all. Count
+        # the effective slots, not only the dataclass field serialized below.
+        effective_prices = getattr(source, "all", None)
+        raw_prices = getattr(source, "prices", None)
+        if isinstance(effective_prices, (list, tuple)):
+            price_count = len(effective_prices)
+        elif isinstance(raw_prices, (list, tuple)):
+            price_count = len(raw_prices)
+        else:
+            price_count = None
         coverage[segment] = {
             "available": True,
-            "price_points": len(prices) if isinstance(prices, (list, tuple)) else None,
+            "price_points": price_count,
+            "has_price_points": price_count > 0 if price_count is not None else None,
+            "raw_input_price_points": (
+                len(raw_prices) if isinstance(raw_prices, (list, tuple)) else None
+            ),
             "resolution_minutes": getattr(source, "resolution_minutes", None),
         }
     return coverage
