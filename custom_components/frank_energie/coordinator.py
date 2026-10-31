@@ -2017,6 +2017,7 @@ class FrankEnergieCoordinator(DataUpdateCoordinator[FrankEnergieData]):
             self._fetch_user_prices_for_range(start_date, end_date, country_code),
         )
 
+        fallback_from_cache = public_prices is None
         if public_prices is None:
             if not use_fallback and not self.api.is_authenticated:
                 # e.g. tomorrow's prices not published yet — don't substitute
@@ -2039,7 +2040,14 @@ class FrankEnergieCoordinator(DataUpdateCoordinator[FrankEnergieData]):
 
         if not self.api.is_authenticated:
             self._record_price_fetch(
-                "price_selection", "public", start_date, public_prices
+                "price_selection",
+                _price_selection_outcome(
+                    public_prices,
+                    authenticated=False,
+                    fallback_from_cache=fallback_from_cache,
+                ),
+                start_date,
+                public_prices,
             )
             return public_prices
 
@@ -2051,7 +2059,14 @@ class FrankEnergieCoordinator(DataUpdateCoordinator[FrankEnergieData]):
                 "Failed to fetch user prices, falling back to public prices"
             )
             self._record_price_fetch(
-                "price_selection", "public_fallback", start_date, public_prices
+                "price_selection",
+                _price_selection_outcome(
+                    public_prices,
+                    authenticated=True,
+                    fallback_from_cache=fallback_from_cache,
+                ),
+                start_date,
+                public_prices,
             )
             return public_prices
 
@@ -2076,7 +2091,15 @@ class FrankEnergieCoordinator(DataUpdateCoordinator[FrankEnergieData]):
                 bool(has_gas),
             )
             self._record_price_fetch(
-                "price_selection", "customer", start_date, user_prices
+                "price_selection",
+                _price_selection_outcome(
+                    user_prices,
+                    authenticated=True,
+                    customer_electricity=bool(has_electricity),
+                    customer_gas=bool(has_gas),
+                ),
+                start_date,
+                user_prices,
             )
             return user_prices
 
@@ -2098,11 +2121,12 @@ class FrankEnergieCoordinator(DataUpdateCoordinator[FrankEnergieData]):
             )
 
         self._cached_prices = user_prices
-        outcome = (
-            "mixed"
-            if (not has_gas and self.user_gas_enabled)
-            or (not has_electricity and self.user_electricity_enabled)
-            else "customer"
+        outcome = _price_selection_outcome(
+            user_prices,
+            authenticated=True,
+            customer_electricity=bool(has_electricity),
+            customer_gas=bool(has_gas),
+            fallback_from_cache=fallback_from_cache,
         )
         self._record_price_fetch("price_selection", outcome, start_date, user_prices)
         return user_prices
