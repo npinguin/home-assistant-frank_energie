@@ -21,9 +21,20 @@ from homeassistant.const import (
     CONF_USERNAME,
 )
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
 
 from . import FrankEnergieEntryData
+from .const import (
+    SERVICE_NAME_COSTS,
+    SERVICE_NAME_ELEC_PRICES,
+    SERVICE_NAME_GAS_PRICES,
+    SERVICE_NAME_INVOICES,
+    SERVICE_NAME_MONTH_SUMMARY,
+    SERVICE_NAME_PRICES,
+    SERVICE_NAME_USAGE,
+    SERVICE_NAME_USER,
+)
 
 TO_REDACT: set[str] = {
     CONF_ACCESS_TOKEN,
@@ -378,6 +389,18 @@ def _safe_ha_entity_state_summary(
     if not isinstance(hass, HomeAssistant):
         return {"configured": False}
     registry = er.async_get(hass)
+    devices = dr.async_get(hass)
+    recognized_services = {
+        SERVICE_NAME_PRICES,
+        SERVICE_NAME_ELEC_PRICES,
+        SERVICE_NAME_GAS_PRICES,
+        SERVICE_NAME_COSTS,
+        SERVICE_NAME_USAGE,
+        SERVICE_NAME_INVOICES,
+        SERVICE_NAME_MONTH_SUMMARY,
+        SERVICE_NAME_USER,
+    }
+    by_service: dict[str, dict[str, int]] = {}
     summary = {
         "registered": 0,
         "disabled": 0,
@@ -393,25 +416,38 @@ def _safe_ha_entity_state_summary(
         if getattr(entity, "config_entry_id", None) != entry.entry_id:
             continue
         summary["registered"] += 1
+        device = devices.devices.get(getattr(entity, "device_id", None))
+        model = getattr(device, "model", None)
+        service = model if model in recognized_services else "Other"
+        bucket = by_service.setdefault(
+            service, {"registered": 0, "available": 0, "unavailable": 0, "unknown": 0, "disabled": 0, "not_loaded": 0}
+        )
+        bucket["registered"] += 1
         if getattr(entity, "disabled_by", None) is not None:
+            bucket["disabled"] += 1
             summary["disabled"] += 1
             continue
         state = hass.states.get(entity.entity_id)
         if state is None:
             summary["not_loaded"] += 1
+            bucket["not_loaded"] += 1
             continue
         if state.state == STATE_UNAVAILABLE:
             summary["unavailable"] += 1
+            bucket["unavailable"] += 1
         elif state.state == STATE_UNKNOWN:
             summary["unknown"] += 1
+            bucket["unknown"] += 1
         else:
             summary["available"] += 1
+            bucket["available"] += 1
 
         last_reported = getattr(state, "last_reported", None)
         if not isinstance(last_reported, datetime) or last_reported.tzinfo is None:
             summary["missing_report_timestamp"] += 1
         elif (now - last_reported).total_seconds() >= 5400:
             summary["not_reported_in_90_minutes"] += 1
+    summary["by_service"] = by_service
     return summary
 
 
