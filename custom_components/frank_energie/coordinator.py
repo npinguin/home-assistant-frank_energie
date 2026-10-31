@@ -47,6 +47,7 @@ from python_frank_energie.models import (
     EnodeVehicles,
     Invoices,
     MarketPrices,
+    MonthInsights,
     MonthSummary,
     PeriodUsageAndCosts,
     Price,
@@ -69,6 +70,7 @@ from .const import (
     CONF_INTERVAL_PV,
     CONF_INTERVAL_SETTINGS,
     CONF_INTERVAL_STATISTICS,
+    CONF_MONTHLY_FINANCE_ENABLED,
     CONF_INTERVAL_VEHICLES,
     COUNTRY_USES_SIMPLE_MARKET_PRICES,
     DATA_BATTERIES,
@@ -81,6 +83,8 @@ from .const import (
     DATA_GAS,
     DATA_INVOICES,
     DATA_MONTH_SUMMARY,
+    DATA_MONTH_INSIGHTS_CURRENT,
+    DATA_MONTH_INSIGHTS_PREVIOUS,
     DATA_PV_SUMMARY,
     DATA_PV_SYSTEMS,
     DATA_REFRESH_TOKEN_EXPIRES_AT,
@@ -104,6 +108,7 @@ from .const import (
     TIMEZONE_AMSTERDAM,
     TOMORROW_PUBLICATION_HOUR_LOCAL,
 )
+from .finance import MonthlyFinanceSnapshot, month_keys
 from .helpers import decrypt_password, price_cache_store
 from .mutation_queue import MutationQueue
 
@@ -328,6 +333,12 @@ class FrankEnergieData(TypedDict):
     month_summary: MonthSummary | None
     """Optional summary data for the month."""
 
+    month_insights_current: MonthlyFinanceSnapshot | None
+    """Optional source-backed current calendar month finance details."""
+
+    month_insights_previous: MonthlyFinanceSnapshot | None
+    """Optional source-backed previous calendar month finance details."""
+
     invoices: Invoices | None
     """Optional invoices data."""
 
@@ -394,6 +405,8 @@ def _empty_data() -> FrankEnergieData:
         DATA_ELECTRICITY: None,
         DATA_GAS: None,
         DATA_MONTH_SUMMARY: None,
+        DATA_MONTH_INSIGHTS_CURRENT: None,
+        DATA_MONTH_INSIGHTS_PREVIOUS: None,
         DATA_INVOICES: None,
         DATA_USAGE: None,
         DATA_USER: None,
@@ -3202,6 +3215,42 @@ class FrankEnergieStatisticsCoordinator(FrankEnergieCoordinator):
                 CONF_INTERVAL_STATISTICS, DEFAULT_INTERVAL_STATISTICS
             )
         )
+        # Never share prior-month cache between delivery sites or months.
+        self._previous_finance_cache_key: tuple[str | None, str, date] | None = None
+        self._previous_finance_snapshot: MonthlyFinanceSnapshot | None = None
+
+    async def _fetch_monthly_insights(
+        self, period: str
+    ) -> MonthlyFinanceSnapshot | None:
+        """Get a named calendar month without exposing account identifiers."""
+        if not self.api.is_authenticated or not self.site_reference:
+            return None
+        try:
+            result: MonthInsights | None = await self.api.month_insights(
+                self.site_reference, period
+            )
+        except (AuthException, RequestException, FrankEnergieException, ClientError) as ex:
+            _LOGGER.debug(
+                "Month insights unavailable for %s (%s)", period, type(ex).__name__
+            )
+            return None
+        if result is None:
+            return None
+        return MonthlyFinanceSnapshot(
+            month=period, insights=result, retrieved_at=datetime.now(ZoneInfo("UTC"))
+        )
+
+    async def _fetch_previous_finance(
+        self, period: str, today: date
+    ) -> MonthlyFinanceSnapshot | None:
+        """Refresh the historical month at most daily per site and month."""
+        key = (self.site_reference, period, today)
+        if key == self._previous_finance_cache_key:
+            return self._previous_finance_snapshot
+        snapshot = await self._fetch_monthly_insights(period)
+        self._previous_finance_snapshot = snapshot
+        self._previous_finance_cache_key = key
+        return snapshot
 
     async def _async_update_data(self) -> FrankEnergieData:
         """Fetch historical statistics data."""
@@ -3231,6 +3280,17 @@ class FrankEnergieStatisticsCoordinator(FrankEnergieCoordinator):
             result[DATA_MONTH_SUMMARY] = data_month_summary
             result[DATA_INVOICES] = data_invoices
             result[DATA_USAGE] = data_period_usage
+            # Explicit opt-in. Never increase API traffic for legacy installs.
+            # A period is carried with each snapshot so previous-month data
+            # cannot be displayed as the new month after local midnight.
+            if self.config_entry.options.get(CONF_MONTHLY_FINANCE_ENABLED, False):
+                current_month, previous_month = month_keys(today)
+                current_finance, previous_finance = await asyncio.gather(
+                    self._fetch_monthly_insights(current_month),
+                    self._fetch_previous_finance(previous_month, today),
+                )
+                result[DATA_MONTH_INSIGHTS_CURRENT] = current_finance
+                result[DATA_MONTH_INSIGHTS_PREVIOUS] = previous_finance
             return result
         except Exception as err:
             await self._handle_fetch_exceptions(err)
