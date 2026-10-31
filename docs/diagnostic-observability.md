@@ -30,6 +30,10 @@ setup; its records are in memory until restart, bounded to 96 entries.
   when the client exposes them. No raw exception text is exported.
 - Recognized top-level GraphQL fields and their `null`/`empty`/`present`
   status; for market-price queries, the number of raw electricity/gas slots.
+- For raw `MonthInsights` finance fields: source classification as
+  `missing`, `null`, `zero`, `positive` or `negative`, **never** the
+  actual monetary/usage values. This is essential to diagnose the pinned
+  client's known `null`→`0.0` coercion without disclosing billing amounts.
 - Separately, the post-parse effective `PriceData.all` counts. This
   distinguishes API-returned data from data rejected/modified by the client
   parser and later coordinator logic.
