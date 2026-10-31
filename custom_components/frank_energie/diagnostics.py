@@ -223,22 +223,25 @@ def _safe_contract_capabilities(settings_data: object) -> dict[str, object]:
     user = settings_data.get("user")
     connections = getattr(user, "connections", None) or []
     segments: dict[str, object] = {}
+
+    def model_field(value: object, key: str) -> object:
+        """Read a whitelisted field from pinned-client dataclasses or test dicts."""
+        return value.get(key) if isinstance(value, dict) else getattr(value, key, None)
+
     for connection in connections:
-        if not isinstance(connection, dict):
-            continue
-        segment = connection.get("segment")
+        segment = model_field(connection, "segment")
         if not isinstance(segment, str) or segment.upper() not in (
             "ELECTRICITY",
             "GAS",
         ):
             continue
         segment_key = segment.lower()
-        external = connection.get("externalDetails") or {}
-        contract = external.get("contract") if isinstance(external, dict) else None
-        if not isinstance(contract, dict):
-            contract = {}
-        reported_meter_code = connection.get("meterType")
-        contract_type = contract.get("contractType")
+        external = model_field(connection, "externalDetails")
+        contract = model_field(external, "contract") or model_field(
+            connection, "contract"
+        )
+        reported_meter_code = model_field(connection, "meterType")
+        contract_type = model_field(contract, "contractType")
         segments[segment_key] = {
             "contract_type": (
                 contract_type.lower() if isinstance(contract_type, str) else None
@@ -248,7 +251,9 @@ def _safe_contract_capabilities(settings_data: object) -> dict[str, object]:
                 if isinstance(reported_meter_code, str)
                 else None
             ),
-            "last_meter_reading_reported": bool(connection.get("lastMeterReadingDate")),
+            "last_meter_reading_reported": bool(
+                model_field(connection, "lastMeterReadingDate")
+            ),
         }
 
     model = proposition.upper() if proposition else None
