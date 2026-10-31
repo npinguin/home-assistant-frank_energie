@@ -627,6 +627,75 @@ class TestReconcileResolution:
             mock_logger.warning.assert_not_called()
 
 
+class TestResolutionProperty:
+    """Tests for resolution selection and public price query parameters."""
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        (
+            "is_authenticated",
+            "api_active_option",
+            "config_option",
+            "pending_change",
+            "expected_resolution",
+        ),
+        [
+            # Authenticated cases
+            (True, "PT60M", "PT15M", False, "PT60M"),
+            (True, "PT60M", "PT15M", True, "PT15M"),
+            (True, "UNSUPPORTED", "PT60M", False, "PT60M"),
+            (True, "UNSUPPORTED", "INVALID", False, "PT15M"),
+            (True, None, "PT60M", False, "PT60M"),
+            (True, "", "PT60M", False, "PT60M"),
+            # Unauthenticated cases
+            (False, "PT60M", "PT15M", False, "PT15M"),
+            (False, "PT15M", "INVALID", False, "PT15M"),
+        ],
+    )
+    async def test_resolution_selection_and_fetch_resolution_parameter(
+        self,
+        coordinator: FrankEnergieCoordinator,
+        is_authenticated: bool,
+        api_active_option: str | None,
+        config_option: str,
+        pending_change: bool,
+        expected_resolution: str,
+    ) -> None:
+        """Verify resolution property selection and the resolution argument in public price queries."""
+        from datetime import date
+        from unittest.mock import PropertyMock
+
+        del coordinator.api.is_authenticated
+        type(coordinator.api).is_authenticated = PropertyMock(
+            return_value=is_authenticated
+        )
+
+        mock_config_entry = MagicMock()
+        mock_config_entry.options = {"resolution": config_option}
+        coordinator.config_entry = mock_config_entry
+
+        coordinator._resolution_change_pending = pending_change
+
+        if api_active_option is not None:
+            mock_state = MagicMock()
+            mock_state.activeOption = api_active_option
+            coordinator._api_resolution_state = mock_state
+        else:
+            coordinator._api_resolution_state = None
+
+        assert coordinator.resolution == expected_resolution
+
+        coordinator.api.prices = AsyncMock(return_value=MagicMock())
+        today = date(2026, 7, 20)
+        tomorrow = date(2026, 7, 21)
+
+        await coordinator._fetch_public_prices_for_range(today, tomorrow, "NL")
+
+        coordinator.api.prices.assert_called_once_with(
+            today, resolution=expected_resolution
+        )
+
+
 class TestApiResolutionProperty:
     """Tests for the new api_resolution property."""
 
@@ -867,7 +936,7 @@ async def test_dynamic_fetch_non_network_errors_ignored(
 async def test_fetch_contract_price_resolution_state_skips_when_unauthenticated_or_no_conn_id(
     coordinator: FrankEnergieCoordinator, mock_frank_energie: AsyncMock
 ) -> None:
-    """Test that _fetch_contract_price_resolution_state returns None and skips API fetch when unauthenticated or connection_id is missing."""
+    """Test that unauthenticated or missing connection IDs skip API fetches."""
     mock_frank_energie.is_authenticated = False
     mock_frank_energie.contract_price_resolution_state = AsyncMock()
 
@@ -1174,7 +1243,7 @@ async def test_price_coordinator_before_window(
 async def test_price_coordinator_inside_window(
     mock_frank_energie, mock_config_entry, monkeypatch
 ) -> None:
-    """Test that price coordinator update interval is 5 minutes inside local 13:00 to 15:00 when tomorrow's prices are not cached."""
+    """Test the five-minute update interval when tomorrow prices are not cached."""
     # Mock utcnow to 12:00 UTC (14:00 local time CEST on May 27th)
     mock_now = datetime(2026, 5, 27, 12, 0, 0, tzinfo=ZoneInfo("UTC"))
     from homeassistant.util import dt as dt_util
