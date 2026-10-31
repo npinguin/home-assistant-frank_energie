@@ -190,7 +190,6 @@ def _safe_finance_coverage(data: object) -> dict[str, object]:
     return result
 
 
-
 def _safe_contract_capabilities(settings_data: object) -> dict[str, object]:
     """Describe source-reported tariff and meter metadata without account PII.
 
@@ -213,7 +212,10 @@ def _safe_contract_capabilities(settings_data: object) -> dict[str, object]:
         if not isinstance(connection, dict):
             continue
         segment = connection.get("segment")
-        if not isinstance(segment, str) or segment.upper() not in ("ELECTRICITY", "GAS"):
+        if not isinstance(segment, str) or segment.upper() not in (
+            "ELECTRICITY",
+            "GAS",
+        ):
             continue
         segment_key = segment.lower()
         external = connection.get("externalDetails") or {}
@@ -304,7 +306,9 @@ async def async_get_config_entry_diagnostics(
                 )
             ),
             "contract_capabilities": _safe_contract_capabilities(
-                getattr(getattr(runtime_data, "settings_coordinator", None), "data", None)
+                getattr(
+                    getattr(runtime_data, "settings_coordinator", None), "data", None
+                )
             ),
         },
     }
