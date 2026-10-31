@@ -56,6 +56,7 @@ from .const import (
     ATTR_TILL_TIME,
     ATTRIBUTION,
     BATTERY_STRATEGY_OPTIONS,
+    CONF_MONTHLY_FINANCE_ENABLED,
     DATA_BATTERIES,
     DATA_CONTRACT_PRICE_RESOLUTION_STATE,
     DATA_ELECTRICITY,
@@ -64,6 +65,8 @@ from .const import (
     DATA_GAS,
     DATA_INVOICES,
     DATA_MONTH_SUMMARY,
+    DATA_MONTH_INSIGHTS_CURRENT,
+    DATA_MONTH_INSIGHTS_PREVIOUS,
     DATA_PV_SUMMARY,
     DATA_PV_SYSTEMS,
     DATA_REFRESH_TOKEN_EXPIRES_AT,
@@ -102,6 +105,7 @@ from .coordinator import (
     FrankEnergieData,
     SmartBatterySessions,
 )
+from .finance import finance_attributes, finance_reading
 from .helpers import (
     register_service_device,
     resolve_gas_unit,
@@ -3560,20 +3564,13 @@ SENSOR_TYPES: tuple[FrankEnergieEntityDescription, ...] = (
         suggested_display_precision=2,
         authenticated=True,
         service_name=SERVICE_NAME_USAGE,
-        value_fn=lambda data: (
-            data[DATA_USAGE].electricity.costs_total
-            if data[DATA_USAGE]
-            and data[DATA_USAGE].electricity
-            and data[DATA_USAGE].electricity.costs_total
-            else None
-        ),
-        attr_fn=lambda data: (
-            {"Electricity costs total": data[DATA_USAGE].electricity.costs_total}
-            if data[DATA_USAGE]
-            and data[DATA_USAGE].electricity
-            and hasattr(data[DATA_USAGE].electricity, "costs_total")
-            else {}
-        ),
+        # This legacy key was a duplicate of *yesterday*, not a month
+        # total. Never relabel historical daily states as actual month costs.
+        value_fn=lambda data: None,
+        attr_fn=lambda data: {
+            "quality": "deprecated_daily_alias",
+            "replacement": "finance_current_electricity_costs",
+        },
         entity_registry_enabled_default=False,
     ),
     FrankEnergieEntityDescription(
@@ -5034,6 +5031,69 @@ def _service_parent_device_id(
     )
 
 
+# Opt-in current/previous *calendar month* snapshots from monthInsights.
+# Never register these on default installations: the feature introduces
+# additional authenticated API calls and deliberately does not write HA Energy
+# long-term statistics (month-to-date values can be revised or reset).
+_MONTHLY_FINANCE_METRICS: Final[dict[str, tuple[SensorDeviceClass, str]]] = {
+    "electricity_costs": (SensorDeviceClass.MONETARY, CURRENCY_EURO),
+    "electricity_kwh": (SensorDeviceClass.ENERGY, UnitOfEnergy.KILO_WATT_HOUR),
+    "gas_costs": (SensorDeviceClass.MONETARY, CURRENCY_EURO),
+    "gas_kwh": (SensorDeviceClass.ENERGY, UnitOfEnergy.KILO_WATT_HOUR),
+    "gas_m3": (SensorDeviceClass.GAS, UnitOfVolume.CUBIC_METERS),
+    "feed_in_costs": (SensorDeviceClass.MONETARY, CURRENCY_EURO),
+    "feed_in_kwh": (SensorDeviceClass.ENERGY, UnitOfEnergy.KILO_WATT_HOUR),
+    "expected_total": (SensorDeviceClass.MONETARY, CURRENCY_EURO),
+    "expected_electricity": (SensorDeviceClass.MONETARY, CURRENCY_EURO),
+    "expected_gas": (SensorDeviceClass.MONETARY, CURRENCY_EURO),
+    "expected_fixed": (SensorDeviceClass.MONETARY, CURRENCY_EURO),
+    "expected_feed_in": (SensorDeviceClass.MONETARY, CURRENCY_EURO),
+}
+_MONTHLY_FINANCE_ACTUAL: Final[tuple[str, ...]] = (
+    "electricity_costs",
+    "electricity_kwh",
+    "gas_costs",
+    "gas_kwh",
+    "gas_m3",
+    "feed_in_costs",
+    "feed_in_kwh",
+)
+
+
+def _monthly_finance_descriptions() -> tuple[FrankEnergieEntityDescription, ...]:
+    """Build stable per-period sensor keys for the user-enabled finance group."""
+    result: list[FrankEnergieEntityDescription] = []
+    for period, data_key, metrics in (
+        ("current", DATA_MONTH_INSIGHTS_CURRENT, tuple(_MONTHLY_FINANCE_METRICS)),
+        ("previous", DATA_MONTH_INSIGHTS_PREVIOUS, _MONTHLY_FINANCE_ACTUAL),
+    ):
+        for metric in metrics:
+            device_class, unit = _MONTHLY_FINANCE_METRICS[metric]
+            result.append(
+                FrankEnergieEntityDescription(
+                    key=f"finance_{period}_{metric}",
+                    translation_key=f"finance_{period}_{metric}",
+                    authenticated=True,
+                    service_name=SERVICE_NAME_COSTS,
+                    is_gas=metric.startswith("gas_"),
+                    device_class=device_class,
+                    native_unit_of_measurement=unit,
+                    # Windowed summaries reset and may be revised; not
+                    # TOTAL_INCREASING, no Recorder long-term statistic.
+                    suggested_display_precision=2,
+                    entity_registry_enabled_default=metric
+                    not in ("gas_kwh", "gas_m3"),
+                    value_fn=lambda data, k=data_key, m=metric: finance_reading(
+                        data.get(k), m
+                    )[0],
+                    attr_fn=lambda data, k=data_key, m=metric: finance_attributes(
+                        data.get(k), m
+                    ),
+                )
+            )
+    return tuple(result)
+
+
 # The previous/next quarter-hour price sensors rely on PriceData helpers added
 # in a later python-frank-energie release. Skip registering them on an older
 # pinned version so users don't get permanently-unavailable entities before the
@@ -5205,6 +5265,17 @@ async def async_setup_entry(
             )
         )
     ]
+
+    if (
+        settings_coordinator.api.is_authenticated
+        and config_entry.options.get(CONF_MONTHLY_FINANCE_ENABLED, False)
+    ):
+        for description in _monthly_finance_descriptions():
+            if description.is_gas and "GAS" not in user_segments:
+                continue
+            entities.append(
+                FrankEnergieSensor(statistics_coordinator, description, config_entry)
+            )
 
     if settings_coordinator.api.is_authenticated and "GAS" not in user_segments:
         await _disable_gas_price_sensors(hass, config_entry)
