@@ -1876,12 +1876,16 @@ class FrankEnergieCoordinator(DataUpdateCoordinator[FrankEnergieData]):
                 start_date,
                 end_date,
             )
-            self._record_price_fetch("public_market", "not_published", start_date, error=ex)
+            self._record_price_fetch(
+                "public_market", "not_published", start_date, error=ex
+            )
             return None
 
         except NetworkError as err:
             _LOGGER.warning("Failed to fetch public prices (%s)", type(err).__name__)
-            self._record_price_fetch("public_market", "network_error", start_date, error=err)
+            self._record_price_fetch(
+                "public_market", "network_error", start_date, error=err
+            )
             return None
 
     async def _fetch_user_prices_for_range(
@@ -1895,7 +1899,9 @@ class FrankEnergieCoordinator(DataUpdateCoordinator[FrankEnergieData]):
             _LOGGER.debug(
                 "Skipping user prices fetch because the client is not authenticated"
             )
-            self._record_price_fetch("customer_tariff", "skipped_unauthenticated", start_date)
+            self._record_price_fetch(
+                "customer_tariff", "skipped_unauthenticated", start_date
+            )
             return None
 
         site_reference = self.site_reference
@@ -1903,7 +1909,9 @@ class FrankEnergieCoordinator(DataUpdateCoordinator[FrankEnergieData]):
             _LOGGER.debug(
                 "Skipping user prices fetch because site_reference is not set"
             )
-            self._record_price_fetch("customer_tariff", "skipped_missing_site", start_date)
+            self._record_price_fetch(
+                "customer_tariff", "skipped_missing_site", start_date
+            )
             return None
 
         user_country = self._user_country or default_country
@@ -1938,12 +1946,16 @@ class FrankEnergieCoordinator(DataUpdateCoordinator[FrankEnergieData]):
                 start_date,
                 end_date,
             )
-            self._record_price_fetch("customer_tariff", "not_published", start_date, error=ex)
+            self._record_price_fetch(
+                "customer_tariff", "not_published", start_date, error=ex
+            )
             return None
 
         except NetworkError as err:
             _LOGGER.warning("Failed to fetch user prices (%s)", type(err).__name__)
-            self._record_price_fetch("customer_tariff", "network_error", start_date, error=err)
+            self._record_price_fetch(
+                "customer_tariff", "network_error", start_date, error=err
+            )
             return None
 
     async def _fetch_prices_with_fallback(
