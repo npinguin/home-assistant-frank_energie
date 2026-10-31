@@ -5,6 +5,7 @@ or Recorder histories. Synthetic values deliberately contain no account data.
 """
 
 from datetime import date
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -13,6 +14,7 @@ from python_frank_energie.models import MarketPrices, PriceData
 from custom_components.frank_energie.coordinator import (
     FrankEnergiePriceCoordinator,
     _price_selection_outcome,
+    _site_segment_flags,
 )
 
 
@@ -150,3 +152,44 @@ async def test_cache_is_never_misreported_as_fresh_public_feed():
     )
     assert selected is coordinator._cached_prices
     assert coordinator._record_price_fetch.call_args.args[1] == "cached_fallback"
+
+
+def test_selected_delivery_site_controls_price_fallback_not_coordinator_defaults():
+    """Settings coordinator owns the sites; price coordinator must read them."""
+    sites = SimpleNamespace(
+        reference="site-a",
+        segments=["ELECTRICITY", "GAS"],
+        deliverySites=[
+            SimpleNamespace(reference="site-a", segments=["ELECTRICITY", "GAS"]),
+            SimpleNamespace(reference="site-b", segments=["ELECTRICITY"]),
+        ],
+    )
+    assert _site_segment_flags(sites, "site-a") == (True, True)
+    assert _site_segment_flags(sites, "site-b") == (True, False)
+    assert _site_segment_flags(sites, "unknown-site") == (False, False)
+    assert _site_segment_flags(sites, None) == (False, False)
+    assert _site_segment_flags(None, "site-a") == (False, False)
+
+
+def test_top_level_first_site_fallback_only_when_reference_matches():
+    """Pinned UserSites parser exposes first-site segments at its root."""
+    sites = SimpleNamespace(
+        reference="site-a",
+        segments=["ELECTRICITY", "GAS"],
+        deliverySites=[],
+    )
+    assert _site_segment_flags(sites, "site-a") == (True, True)
+    assert _site_segment_flags(sites, "site-b") == (False, False)
+
+
+def test_selected_site_flags_are_case_normalized_and_fail_closed_on_missing_data():
+    sites = SimpleNamespace(
+        reference="site-a",
+        segments=["ELECTRICITY"],
+        deliverySites=[
+            SimpleNamespace(reference="site-a", segments=["gas", "eLeCtRiCiTy"]),
+        ],
+    )
+    assert _site_segment_flags(sites, "site-a") == (True, True)
+    sites.deliverySites[0].segments = None
+    assert _site_segment_flags(sites, "site-a") == (True, False)
