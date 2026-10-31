@@ -2485,3 +2485,90 @@ def test_tomorrow_cache_date_validation_checks_gas_only_and_both_segments() -> N
     assert not FrankEnergieCoordinator._tomorrow_cache_matches_date(
         mixed_stale, tomorrow
     )
+
+def _day_prices(day: date, *, segment: str, hours: int | None = None) -> PriceData:
+    """Build real timestamped slots for a local day without assuming 24 DST hours."""
+    from zoneinfo import ZoneInfo
+
+    zone = ZoneInfo("Europe/Amsterdam")
+    start = datetime.combine(day, datetime.min.time(), tzinfo=zone).astimezone(UTC)
+    end = datetime.combine(
+        day + timedelta(days=1), datetime.min.time(), tzinfo=zone
+    ).astimezone(UTC)
+    count = int((end - start).total_seconds() // 3600)
+    if hours is not None:
+        count = min(count, hours)
+    slots = [
+        {
+            "from": (start + timedelta(hours=i)).isoformat(),
+            "till": (start + timedelta(hours=i + 1)).isoformat(),
+            "marketPrice": 0.1,
+            "marketPriceTax": 0.02,
+            "sourcingMarkupPrice": 0.01,
+            "energyTaxPrice": 0.1,
+        }
+        for i in range(count)
+    ]
+    return PriceData(slots, energy_type=segment)
+
+
+@pytest.mark.parametrize("day", [date(2026, 3, 29), date(2026, 10, 25)])
+def test_tomorrow_day_coverage_respects_dst_and_missing_slots(day: date) -> None:
+    """Both short and long DST days require actual interval coverage, not 24 points."""
+    complete = _day_prices(day, segment="electricity")
+    assert FrankEnergieCoordinator._covers_local_day(complete, day)
+    partial = _day_prices(day, segment="electricity", hours=6)
+    assert not FrankEnergieCoordinator._covers_local_day(partial, day)
+
+
+@pytest.mark.asyncio
+async def test_partial_subscribed_gas_tomorrow_cache_is_retried(
+    coordinator: FrankEnergieCoordinator,
+) -> None:
+    """Six available gas hours must not freeze a whole future day of prices."""
+    today = date(2026, 7, 20)
+    tomorrow = date(2026, 7, 21)
+    now_utc = datetime(2026, 7, 20, 12, 0, tzinfo=UTC)
+    coordinator.user_electricity_enabled = True
+    coordinator.user_gas_enabled = True
+    partial = MarketPrices(
+        electricity=_day_prices(tomorrow, segment="electricity"),
+        gas=_day_prices(tomorrow, segment="gas", hours=6),
+        energy_country="BE",
+    )
+    complete = MarketPrices(
+        electricity=_day_prices(tomorrow, segment="electricity"),
+        gas=_day_prices(tomorrow, segment="gas"),
+        energy_country="BE",
+    )
+    coordinator.cached_prices_tomorrow = partial
+    coordinator.last_fetch_tomorrow = now_utc
+    coordinator._fetch_tomorrow_data = AsyncMock(return_value=complete)
+
+    assert not coordinator._tomorrow_cache_covers_selected_site(partial, tomorrow)
+    assert coordinator._tomorrow_cache_covers_selected_site(complete, tomorrow)
+    assert await coordinator._refresh_tomorrow_cache(today, tomorrow, now_utc) is complete
+    coordinator._fetch_tomorrow_data.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_complete_subscribed_gas_tomorrow_cache_avoids_repeat_call(
+    coordinator: FrankEnergieCoordinator,
+) -> None:
+    """A full day remains cached without redundant requests."""
+    today = date(2026, 7, 20)
+    tomorrow = date(2026, 7, 21)
+    now_utc = datetime(2026, 7, 20, 12, 0, tzinfo=UTC)
+    coordinator.user_electricity_enabled = True
+    coordinator.user_gas_enabled = True
+    complete = MarketPrices(
+        electricity=_day_prices(tomorrow, segment="electricity"),
+        gas=_day_prices(tomorrow, segment="gas"),
+        energy_country="BE",
+    )
+    coordinator.cached_prices_tomorrow = complete
+    coordinator.last_fetch_tomorrow = now_utc
+    coordinator._fetch_tomorrow_data = AsyncMock()
+
+    assert await coordinator._refresh_tomorrow_cache(today, tomorrow, now_utc) is complete
+    coordinator._fetch_tomorrow_data.assert_not_called()
