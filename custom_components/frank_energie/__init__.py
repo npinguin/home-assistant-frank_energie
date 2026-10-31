@@ -84,17 +84,9 @@ async def async_setup_entry(
 ) -> bool:
     """Set up the Frank Energie component from a config entry."""
     _LOGGER.debug("Setting up Frank Energie component for entry: %s", entry.entry_id)
-    _LOGGER.debug("Setting up Frank Energie entry: %s", entry)
-    _LOGGER.debug(
-        "Setting up Frank Energie entry data: %s",
-        {
-            key: "**REDACTED**" if key in (CONF_ACCESS_TOKEN, CONF_TOKEN) else value
-            for key, value in entry.data.items()
-        },
-    )
+    # Never log config-entry repr, authentication metadata, or options: these
+    # can contain encrypted credentials, site references and personal fields.
     _LOGGER.debug("Setting up Frank Energie entry domain: %s", entry.domain)
-    _LOGGER.debug("Setting up Frank Energie entry unique_id: %s", entry.unique_id)
-    _LOGGER.debug("Setting up Frank Energie entry options: %s", entry.options)
     component = FrankEnergieComponent(hass, entry)
     return await component.setup()
 
