@@ -56,7 +56,7 @@ def test_live_acceptance_and_backout_are_explicit():
     candidate = (ROOT / "docs/candidates/2026.11.1.1.md").read_text()
     tracker = (ROOT / "docs/engineering/RELEASE_TRAIN.md").read_text()
 
-    assert "opt-in" in candidate
+    assert "finance defaults **OFF**" in candidate
     assert "Home Assistant" in candidate
     assert "Rollback" in candidate
     assert "#11" in candidate
