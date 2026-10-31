@@ -2456,3 +2456,32 @@ async def test_is_cache_fresh_accepts_valid_same_day_tomorrow_cache(
     )
 
     assert price_coordinator._is_cache_fresh(now_utc) is True
+
+def test_tomorrow_cache_date_validation_checks_gas_only_and_both_segments() -> None:
+    """Gas-only subscriptions work, but stale gas cannot hide behind valid electricity."""
+    tomorrow = date(2026, 7, 21)
+    future = _make_market_prices("2026-07-20T22:00:00.000Z")
+    past = _make_market_prices("2026-07-20T10:00:00.000Z")
+
+    gas_only = MarketPrices(
+        electricity=PriceData([], energy_type="electricity"),
+        gas=PriceData(future.electricity.prices, energy_type="gas"),
+        energy_country="BE",
+    )
+    assert FrankEnergieCoordinator._tomorrow_cache_matches_date(gas_only, tomorrow)
+
+    mixed_stale = MarketPrices(
+        electricity=future.electricity,
+        gas=PriceData(past.electricity.prices, energy_type="gas"),
+        energy_country="BE",
+    )
+    assert not FrankEnergieCoordinator._tomorrow_cache_matches_date(
+        mixed_stale, tomorrow
+    )
+
+    # Both source segments are checked even when electricity itself is stale.
+    mixed_stale.electricity = past.electricity
+    mixed_stale.gas = gas_only.gas
+    assert not FrankEnergieCoordinator._tomorrow_cache_matches_date(
+        mixed_stale, tomorrow
+    )
