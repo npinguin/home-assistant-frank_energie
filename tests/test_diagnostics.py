@@ -696,3 +696,49 @@ def test_ha_entity_state_summary_never_infers_from_fake_hass() -> None:
     assert _safe_ha_entity_state_summary(
         MagicMock(), SimpleNamespace(entry_id="redacted-entry")
     ) == {"configured": False}
+
+
+def test_ha_entity_summary_limits_device_group_names_to_known_services(
+    hass, monkeypatch
+) -> None:
+    """Private device models and entity IDs must not leak via diagnostics."""
+    from homeassistant.helpers import device_registry as dr
+    from homeassistant.helpers import entity_registry as er
+
+    hass.states.async_set("sensor.example_private", "ok")
+    hass.states.async_set("sensor.example_price", "42")
+    entities = {
+        "one": SimpleNamespace(
+            config_entry_id="my-entry",
+            entity_id="sensor.example_private",
+            device_id="secret-device",
+            disabled_by=None,
+        ),
+        "two": SimpleNamespace(
+            config_entry_id="my-entry",
+            entity_id="sensor.example_price",
+            device_id="prices-device",
+            disabled_by=None,
+        ),
+    }
+    monkeypatch.setattr(
+        er, "async_get", lambda _: SimpleNamespace(entities=entities)
+    )
+    monkeypatch.setattr(
+        dr,
+        "async_get",
+        lambda _: SimpleNamespace(
+            devices={
+                "secret-device": SimpleNamespace(model="private-meter-model"),
+                "prices-device": SimpleNamespace(model="Prices"),
+            }
+        ),
+    )
+
+    output = _safe_ha_entity_state_summary(
+        hass, SimpleNamespace(entry_id="my-entry")
+    )
+    assert output["by_service"]["Prices"]["available"] == 1
+    assert output["by_service"]["Other"]["available"] == 1
+    assert "private-meter-model" not in str(output)
+    assert "example_private" not in str(output)
