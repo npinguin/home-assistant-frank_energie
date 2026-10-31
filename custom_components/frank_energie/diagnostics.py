@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+from collections import Counter
 from dataclasses import fields, is_dataclass
 from datetime import date, datetime, time
+from zoneinfo import ZoneInfo
 from decimal import Decimal
 from enum import Enum
 from uuid import UUID
@@ -158,6 +160,7 @@ def _safe_price_coverage(data: object) -> dict[str, object]:
     if not isinstance(data, dict):
         return {}
     coverage: dict[str, object] = {}
+    local_timezone = ZoneInfo("Europe/Brussels")
     for segment in ("electricity", "gas"):
         source = data.get(segment)
         if source is None:
@@ -175,8 +178,18 @@ def _safe_price_coverage(data: object) -> dict[str, object]:
             price_count = len(raw_prices)
         else:
             price_count = None
+        # Slot counts by local day are *not* hour coverage: missing intervals,
+        # overlapping intervals, and DST transitions still require validation.
+        # Keep only the day/count metadata, never any price or provider payload.
+        local_days: Counter[str] = Counter()
+        if isinstance(effective_prices, (list, tuple)):
+            for price in effective_prices:
+                start = getattr(price, "date_from", None)
+                if isinstance(start, datetime) and start.tzinfo is not None:
+                    local_days[start.astimezone(local_timezone).date().isoformat()] += 1
         coverage[segment] = {
             "available": True,
+            "slots_by_local_day": dict(sorted(local_days.items())[:4]),
             "price_points": price_count,
             "has_price_points": price_count > 0 if price_count is not None else None,
             "raw_input_price_points": (
@@ -303,6 +316,11 @@ async def async_get_config_entry_diagnostics(
             "last_fetch_tomorrow": coordinator.last_fetch_tomorrow,
             "has_cached_prices": coordinator.cached_prices is not None,
             "has_cached_today": coordinator.cached_prices_today is not None,
+            # Legacy cached_prices_today may be absent after a successful live
+            # fetch. _static_prices_today is the actual active daily cache.
+            "has_active_today_prices": (
+                getattr(coordinator, "_static_prices_today", None) is not None
+            ),
             "has_cached_tomorrow": coordinator.cached_prices_tomorrow is not None,
             "resolution_change_pending": getattr(
                 coordinator,
