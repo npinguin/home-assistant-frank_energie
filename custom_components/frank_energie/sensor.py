@@ -848,7 +848,31 @@ def format_user_name(data: dict) -> str | None:
     return None
 
 
-STATIC_ENODE_SENSOR_TYPES: tuple[FrankEnergieEntityDescription, ...] = (
+STATIC_ENODE_def _get_user_meter_types_by_segment(data: dict) -> dict[str, str]:
+    """Preserve independently reported electricity/gas meter types."""
+    user = data.get(DATA_USER)
+    connections = getattr(user, "connections", None) or []
+    types: dict[str, str] = {}
+    for index, connection in enumerate(connections, start=1):
+        if not isinstance(connection, dict):
+            continue
+        raw_type = connection.get("meterType")
+        if not isinstance(raw_type, str) or not raw_type.strip():
+            continue
+        segment = connection.get("segment")
+        if not isinstance(segment, str) or not segment.strip():
+            segment = f"connection_{index}"
+        types[segment.strip().lower()] = raw_type.strip().lower()
+    return types
+
+
+def _get_primary_user_meter_type(data: dict) -> str | None:
+    """Keep existing entity identity; prioritize electricity."""
+    types = _get_user_meter_types_by_segment(data)
+    return types.get("electricity") or next(iter(types.values()), None)
+
+
+SENSOR_TYPES: tuple[FrankEnergieEntityDescription, ...] = (
     FrankEnergieEntityDescription(
         key="enode_total_chargers",
         native_unit_of_measurement=None,
@@ -1740,7 +1764,7 @@ SENSOR_TYPES: tuple[FrankEnergieEntityDescription, ...] = (
             data[DATA_CONTRACT_PRICE_RESOLUTION_STATE].active_option.lower()
             if data.get(DATA_CONTRACT_PRICE_RESOLUTION_STATE)
             and data[DATA_CONTRACT_PRICE_RESOLUTION_STATE].active_option
-            else STATE_UNKNOWN
+            else None
         ),
         available_fn=lambda data: (
             data.get(DATA_CONTRACT_PRICE_RESOLUTION_STATE) is not None
@@ -3740,7 +3764,7 @@ SENSOR_TYPES: tuple[FrankEnergieEntityDescription, ...] = (
         key="propositionType",
         translation_key="proposition_type",
         device_class=SensorDeviceClass.ENUM,
-        options=["dynamic"],
+        options=["dynamic", "model"],
         icon="mdi:file-document-check",
         authenticated=True,
         service_name=SERVICE_NAME_USER,
@@ -3938,22 +3962,14 @@ SENSOR_TYPES: tuple[FrankEnergieEntityDescription, ...] = (
         key="meterType",
         translation_key="meter_type",
         device_class=SensorDeviceClass.ENUM,
-        options=["slm"],
+        options=["slm", "smr1", "smr3"],
         icon="mdi:meter-electric",
         authenticated=True,
         service_name=SERVICE_NAME_USER,
-        value_fn=lambda data: (
-            next(
-                (
-                    connection["meterType"].lower()
-                    for connection in data[DATA_USER].connections
-                    if connection.get("meterType")
-                ),
-                None,
-            )
-            if data[DATA_USER] and data[DATA_USER].connections
-            else None
-        ),
+        value_fn=_get_primary_user_meter_type,
+        attr_fn=lambda data: {
+            "meter_types_by_segment": _get_user_meter_types_by_segment(data)
+        },
     ),
     FrankEnergieEntityDescription(
         key="contractStartDate",
@@ -4309,14 +4325,38 @@ class FrankEnergieSensor(
     # _attr_device_class = SensorDeviceClass.MONETARY
     # _attr_state_class = SensorStateClass.MEASUREMENT
 
+    def _validated_enum_state(self, value: StateType) -> StateType:
+        """Do not publish unsupported contract enums into Home Assistant."""
+        if self.entity_description.device_class != SensorDeviceClass.ENUM:
+            return value
+
+        options = self.entity_description.options or ()
+        normalized = value.strip().lower() if isinstance(value, str) else None
+        if normalized in options:
+            self._last_invalid_enum_value = None
+            return normalized
+
+        if normalized and normalized not in (STATE_UNKNOWN, STATE_UNAVAILABLE):
+            if value != self._last_invalid_enum_value:
+                _LOGGER.warning(
+                    "Frank Energie enum sensor %s received unsupported value %r; "
+                    "allowed options: %s. Marking unavailable.",
+                    self.entity_description.key,
+                    value,
+                    options,
+                )
+                self._last_invalid_enum_value = value
+        return None
+
     @property
     def native_value(self) -> StateType:
-        """Return the state of the sensor."""
+        """Return a Home Assistant-valid state from current source data."""
         if self.coordinator.data is None:
             return None
         try:
-            return self.entity_description.value_fn(self.coordinator.data)
-        except (TypeError, IndexError, ValueError, AttributeError):
+            value = self.entity_description.value_fn(self.coordinator.data)
+            return self._validated_enum_state(value)
+        except (TypeError, IndexError, ValueError, AttributeError, KeyError):
             return None
 
     @property
@@ -4388,6 +4428,7 @@ class FrankEnergieSensor(
     ) -> None:
         """Initialize the sensor."""
         self.entity_description: FrankEnergieEntityDescription = description
+        self._last_invalid_enum_value: object | None = None
         if hasattr(self.entity_description, "state_class"):
             self._attr_state_class = getattr(
                 self.entity_description, "state_class", None
@@ -4450,7 +4491,9 @@ class FrankEnergieSensor(
         """Get the latest data and updates the states."""
         data = self.coordinator.data
         try:
-            self._attr_native_value = self.entity_description.value_fn(data)
+            self._attr_native_value = self._validated_enum_state(
+                self.entity_description.value_fn(data)
+            )
         except (IndexError, ValueError):
             self._attr_native_value = None
         except (AttributeError, TypeError, KeyError):
