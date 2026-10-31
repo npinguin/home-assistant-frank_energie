@@ -234,3 +234,22 @@ async def test_price_refresh_reconciles_flags_from_selected_site_before_fetching
     )
     await coordinator._async_update_data()
     coordinator._fetch_prices_with_fallback.assert_awaited_once()
+
+
+def test_actual_pinned_user_sites_parser_preserves_selected_site_isolation():
+    """The client exposes first-site segments at root even with multiple sites."""
+    from python_frank_energie.models import UserSites
+
+    sites = UserSites.from_dict(
+        {
+            "data": {
+                "userSites": [
+                    {"reference": "site-a", "segments": ["ELECTRICITY", "GAS"]},
+                    {"reference": "site-b", "segments": ["GAS"]},
+                ]
+            }
+        }
+    )
+    assert _site_segment_flags(sites, "site-a") == (True, True)
+    assert _site_segment_flags(sites, "site-b") == (False, True)
+    assert _site_segment_flags(sites, "missing-site") == (False, False)
