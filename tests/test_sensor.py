@@ -1586,3 +1586,78 @@ def test_meter_type_handles_empty_and_gas_only_connections(
     data = {const.DATA_USER: SimpleNamespace(connections=connections)}
     assert description.value_fn(data) == expected_primary
     assert description.attr_fn(data)["meter_types_by_segment"] == expected_types
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("selected", "expect_gas"),
+    [("site-electric", False), ("site-gas", True)],
+)
+async def test_gas_sensor_registration_follows_selected_site_not_first_site(
+    hass: HomeAssistant, selected: str, expect_gas: bool
+) -> None:
+    """No gas price/usage/forecast entities disappear behind the first site's flags."""
+    from types import SimpleNamespace
+    from unittest.mock import MagicMock
+
+    from custom_components.frank_energie.const import (
+        DATA_USER,
+        DATA_USER_SITES,
+        SERVICE_NAME_GAS_PRICES,
+        SERVICE_NAME_USAGE,
+    )
+    from custom_components.frank_energie.sensor import async_setup_entry
+
+    def coordinator() -> MagicMock:
+        value = MagicMock()
+        value.data = {}
+        value.api.is_authenticated = True
+        return value
+
+    runtime = MagicMock()
+    runtime.settings_coordinator = coordinator()
+    runtime.price_coordinator = coordinator()
+    runtime.price_coordinator.site_reference = selected
+    runtime.statistics_coordinator = coordinator()
+    runtime.battery_coordinator = coordinator()
+    runtime.charger_coordinator = coordinator()
+    runtime.pv_coordinator = coordinator()
+    runtime.vehicle_coordinator = coordinator()
+    runtime.settings_coordinator.data = {
+        DATA_USER_SITES: SimpleNamespace(
+            reference="site-electric",
+            segments=["ELECTRICITY"],
+            deliverySites=[
+                SimpleNamespace(reference="site-electric", segments=["ELECTRICITY"]),
+                SimpleNamespace(reference="site-gas", segments=["GAS"]),
+            ],
+        ),
+        DATA_USER: SimpleNamespace(connections=[]),
+    }
+
+    entry = MockConfigEntry(domain=const.DOMAIN, unique_id="selected-gas-test")
+    entry.runtime_data = runtime
+    entry.add_to_hass(hass)
+    added = []
+
+    def collect(entities, update_before_add=False):
+        added.extend(entities)
+
+    await async_setup_entry(hass, entry, collect)
+
+    gas_price_keys = {
+        entity.entity_description.key
+        for entity in added
+        if entity.entity_description.service_name == SERVICE_NAME_GAS_PRICES
+    }
+    gas_usage_keys = {
+        entity.entity_description.key
+        for entity in added
+        if entity.entity_description.service_name == SERVICE_NAME_USAGE
+        and entity.entity_description.key in (
+            "costs_gas_yesterday",
+            "usage_gas_yesterday",
+        )
+    }
+    assert ("gas_markup" in gas_price_keys) is expect_gas
+    assert ("gas_tomorrow_avg" in gas_price_keys) is expect_gas
+    assert (gas_usage_keys == {"costs_gas_yesterday", "usage_gas_yesterday"}) is expect_gas
