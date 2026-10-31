@@ -1181,6 +1181,9 @@ async def test_promote_tomorrow_prices_updates_all_caches(coordinator) -> None:
     tomorrow_prices.electricity = MagicMock()
     tomorrow_prices.gas = MagicMock()
     coordinator.cached_prices_tomorrow = tomorrow_prices
+    # This test isolates promotion/merge behavior. Real date validation is
+    # independently covered using typed PriceData fixtures below.
+    coordinator._tomorrow_cache_matches_date = MagicMock(return_value=True)
 
     # Mock current cached_prices / data
     coordinator.cached_prices = {
@@ -1353,6 +1356,8 @@ async def test_price_coordinator_midnight_rollover(
     tomorrow_prices.electricity = MagicMock()
     tomorrow_prices.gas = MagicMock()
     price_coordinator.cached_prices_tomorrow = tomorrow_prices
+    # Isolate the rollover merge: date validation has separate real-series tests.
+    price_coordinator._tomorrow_cache_matches_date = MagicMock(return_value=True)
 
     price_coordinator.cached_prices = {
         DATA_ELECTRICITY: MagicMock(),
@@ -1398,6 +1403,8 @@ async def test_price_coordinator_midnight_rollover_resolution_mismatch(
     tomorrow_prices.electricity = MagicMock(name="tomorrow_electricity")
     tomorrow_prices.gas = MagicMock(name="tomorrow_gas")
     price_coordinator.cached_prices_tomorrow = tomorrow_prices
+    # Isolate the rollover merge: date validation has separate real-series tests.
+    price_coordinator._tomorrow_cache_matches_date = MagicMock(return_value=True)
 
     price_coordinator.cached_prices = {
         DATA_ELECTRICITY: MagicMock(name="yesterday_electricity"),
