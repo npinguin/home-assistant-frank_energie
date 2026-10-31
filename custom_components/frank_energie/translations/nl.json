@@ -563,7 +563,7 @@
         }
       },
       "meter_type": {
-        "name": "Meter",
+        "name": "Metercode (Frank API)",
         "state": {
           "slm": "Slimme meter",
           "smr1": "SMR1",
