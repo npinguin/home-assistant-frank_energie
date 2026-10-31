@@ -233,7 +233,6 @@ def _safe_finance_coverage(data: object) -> dict[str, object]:
     return result
 
 
-
 def _safe_provider_data_freshness(
     data: object, *, local_today: date | None = None
 ) -> dict[str, object]:
@@ -280,7 +279,9 @@ def _safe_provider_data_freshness(
             "present": True,
             "usage_total_reported": getattr(segment, "usage_total", None) is not None,
             "costs_total_reported": getattr(segment, "costs_total", None) is not None,
-            "intervals_reported": len(items) if isinstance(items, (list, tuple)) else None,
+            "intervals_reported": len(items)
+            if isinstance(items, (list, tuple))
+            else None,
         }
 
     all_invoices = getattr(invoices, "all_periods_invoices", None)
@@ -373,7 +374,6 @@ def _safe_contract_capabilities(settings_data: object) -> dict[str, object]:
         "meter_code_source": "frank_api_metadata",
         "segments": segments,
     }
-
 
 
 def _safe_ha_entity_state_summary(
