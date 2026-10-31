@@ -13,6 +13,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from custom_components.frank_energie.diagnostics import (
+    _safe_contract_capabilities,
     _serialize,
     async_get_config_entry_diagnostics,
 )
@@ -320,3 +321,123 @@ async def test_diagnostics_distinguish_coordinator_health_from_data_coverage() -
     assert evidence["finance_coverage"]["month_insights_previous"] is False
     assert evidence["finance_coverage"]["invoices"] is False
     assert "private" not in str(evidence)
+
+
+def test_variable_model_contract_reports_meter_codes_as_opaque_api_metadata() -> None:
+    """Variable tariff and raw meter codes are independent source capabilities."""
+    settings = {
+        "user_sites": SimpleNamespace(propositionType="MODEL"),
+        "user": SimpleNamespace(
+            connections=[
+                {
+                    "segment": "ELECTRICITY",
+                    "meterType": "SMR3",
+                    "lastMeterReadingDate": "2026-10-30",
+                    "externalDetails": {"contract": {"contractType": "model"}},
+                },
+                {
+                    "segment": "GAS",
+                    "meterType": "SMR1",
+                    "lastMeterReadingDate": None,
+                    "externalDetails": {"contract": {"contractType": "model"}},
+                },
+            ]
+        ),
+    }
+    result = _safe_contract_capabilities(settings)
+    assert result["proposition_type"] == "MODEL"
+    assert result["variable_contract"] is True
+    assert result["meter_code_source"] == "frank_api_metadata"
+    assert result["segments"]["electricity"] == {
+        "contract_type": "model",
+        "reported_meter_code": "SMR3",
+        "last_meter_reading_reported": True,
+    }
+    assert result["segments"]["gas"] == {
+        "contract_type": "model",
+        "reported_meter_code": "SMR1",
+        "last_meter_reading_reported": False,
+    }
+    assert "productName" not in str(result)
+
+
+def test_contract_metadata_does_not_infer_missing_physical_meter_details() -> None:
+    """No code -> no invented meter class; model must not imply dynamic tariff."""
+    result = _safe_contract_capabilities(
+        {
+            "user_sites": SimpleNamespace(propositionType="MODEL"),
+            "user": SimpleNamespace(
+                connections=[
+                    {
+                        "segment": "ELECTRICITY",
+                        "meterType": None,
+                        "externalDetails": {"contract": {"contractType": "model"}},
+                    }
+                ]
+            ),
+        }
+    )
+    assert result["segments"]["electricity"]["reported_meter_code"] is None
+    assert result["variable_contract"] is True
+    assert _safe_contract_capabilities({})["variable_contract"] is None
+
+
+@pytest.mark.asyncio
+async def test_diagnostics_redact_nested_provider_identifiers_and_payment_data() -> None:
+    """Raw API models must not expose identifying account, referral or payment IDs."""
+    coordinator = SimpleNamespace(
+        last_update_success=True,
+        update_interval=timedelta(hours=1),
+        site_reference="sensitive-site",
+        country_code="BE",
+        _user_country="BE",
+        resolution="PT15M",
+        api_resolution=None,
+        user_electricity_enabled=False,
+        user_gas_enabled=False,
+        last_fetch_today=None,
+        last_fetch_tomorrow=None,
+        cached_prices=None,
+        cached_prices_today=None,
+        cached_prices_tomorrow=None,
+        _resolution_change_pending=False,
+        data={
+            "user": {
+                "id": "sensitive-account",
+                "InviteLinkUser": {
+                    "fromName": "sensitive-name",
+                    "slug": "sensitive-referral",
+                },
+                "activePaymentAuthorization": {
+                    "mandateId": "sensitive-mandate",
+                    "id": "sensitive-authorization",
+                },
+                "advancedPaymentAmount": 265,
+            }
+        },
+    )
+    runtime = SimpleNamespace(
+        coordinator=coordinator,
+        battery_session_coordinators={},
+    )
+    entry = MagicMock()
+    entry.entry_id = "sensitive-entry"
+    entry.title = "sensitive-title"
+    entry.options = {}
+    entry.data = {}
+    entry.runtime_data = runtime
+
+    diagnostics = await async_get_config_entry_diagnostics(MagicMock(), entry)
+    text = str(diagnostics)
+    for secret in (
+        "sensitive-account",
+        "sensitive-name",
+        "sensitive-referral",
+        "sensitive-mandate",
+        "sensitive-authorization",
+        "sensitive-entry",
+        "sensitive-title",
+        "265",
+    ):
+        assert secret not in text
+    assert diagnostics["entry"]["entry_id"] == "**REDACTED**"
