@@ -15,6 +15,7 @@ import pytest
 from custom_components.frank_energie.diagnostics import (
     _safe_contract_capabilities,
     _safe_price_coverage,
+    _safe_provider_data_freshness,
     _serialize,
     async_get_config_entry_diagnostics,
 )
@@ -572,3 +573,67 @@ def test_unparseable_price_date_does_not_leak_or_break_diagnostics() -> None:
     result = _safe_price_coverage({"electricity": source})
     assert result["electricity"]["slots_by_local_day"] == {}
     assert "private-customer" not in str(result)
+
+
+def test_provider_data_freshness_separates_api_objects_from_meter_data() -> None:
+    """An HTTP success can still mean stale meter dates or empty usage."""
+    summary = SimpleNamespace(lastMeterReadingDate="2026-10-25")
+    usage = SimpleNamespace(
+        electricity=SimpleNamespace(
+            usage_total=0.0, costs_total=None, items=[]
+        ),
+        gas=None,
+        feed_in=SimpleNamespace(
+            usage_total=None, costs_total=0.0, items=[object()]
+        ),
+    )
+    invoices = SimpleNamespace(
+        all_periods_invoices=[
+            SimpleNamespace(StartDate=datetime.fromisoformat("2026-09-01T00:00:00+02:00")),
+            SimpleNamespace(StartDate=datetime.fromisoformat("2026-10-01T00:00:00+02:00")),
+        ]
+    )
+    result = _safe_provider_data_freshness(
+        {
+            "month_summary": summary,
+            "usage": usage,
+            "invoices": invoices,
+        },
+        local_today=date(2026, 11, 1),
+    )
+    assert result["month_summary"] == {
+        "present": True,
+        "last_meter_reading_age_days": 7,
+    }
+    assert result["usage"]["segments"]["electricity"] == {
+        "present": True,
+        "usage_total_reported": True,
+        "costs_total_reported": False,
+        "intervals_reported": 0,
+    }
+    assert result["usage"]["segments"]["gas"] == {"present": False}
+    assert result["usage"]["segments"]["feed_in"] == {
+        "present": True,
+        "usage_total_reported": False,
+        "costs_total_reported": True,
+        "intervals_reported": 1,
+    }
+    assert result["invoices"]["invoice_count"] == 2
+    assert result["invoices"]["latest_invoice_start_age_days"] == 31
+    assert "0.0" not in str(result)
+
+
+def test_provider_data_freshness_handles_missing_dates_without_guessing() -> None:
+    result = _safe_provider_data_freshness(
+        {
+            "month_summary": SimpleNamespace(lastMeterReadingDate="invalid-private"),
+            "invoices": SimpleNamespace(all_periods_invoices=[]),
+            "usage": SimpleNamespace(electricity=None, gas=None, feed_in=None),
+        },
+        local_today=date(2026, 11, 1),
+    )
+    assert result["month_summary"]["last_meter_reading_age_days"] is None
+    assert result["invoices"]["invoice_count"] == 0
+    assert result["invoices"]["latest_invoice_start_age_days"] is None
+    assert result["usage"]["segments"]["gas"]["present"] is False
+    assert "invalid-private" not in str(result)
