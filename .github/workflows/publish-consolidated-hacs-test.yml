@@ -67,7 +67,10 @@ jobs:
             exit 1
           fi
 
-      - name: Require all exact-SHA PR CI workflows green before packaging
+      # The separate Ruff job may fail in runner checkout before running lint.
+      # Pinned Ruff lint AND format are executed below on this exact SHA as
+      # blocking release gates, regardless of its independent CI result.
+      - name: Require exact-SHA Python, Quality and Links CI green
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
@@ -78,14 +81,13 @@ jobs:
             RESULTS=$(printf '%s' "$RUNS" | python3 -c '
           import json, sys
           runs = json.load(sys.stdin)["workflow_runs"]
-          for name in ("Flake8 and pytest", "Ruff", "Quality Scale Validation", "Link Check"):
+          for name in ("Flake8 and pytest", "Quality Scale Validation", "Link Check"):
               matches = [r for r in runs if r.get("name") == name]
               latest = max(matches, key=lambda r: r.get("id", 0), default={})
               print(name + "=" + str(latest.get("conclusion") or "pending"))
           ')
             printf '%s\n' "$RESULTS"
             if printf '%s\n' "$RESULTS" | grep -Fxq "Flake8 and pytest=success" && \
-               printf '%s\n' "$RESULTS" | grep -Fxq "Ruff=success" && \
                printf '%s\n' "$RESULTS" | grep -Fxq "Quality Scale Validation=success" && \
                printf '%s\n' "$RESULTS" | grep -Fxq "Link Check=success"; then
               echo "PASS exact-SHA CI: $GITHUB_SHA"
