@@ -1989,9 +1989,7 @@ class FrankEnergieCoordinator(DataUpdateCoordinator[FrankEnergieData]):
                 _LOGGER.debug(
                     "No public prices available yet, skipping fallback to cached prices"
                 )
-                self._record_price_fetch(
-                    "price_selection", "not_available", start_date
-                )
+                self._record_price_fetch("price_selection", "not_available", start_date)
                 return None
             public_prices = getattr(
                 self,
@@ -2070,9 +2068,7 @@ class FrankEnergieCoordinator(DataUpdateCoordinator[FrankEnergieData]):
             or (not has_electricity and self.user_electricity_enabled)
             else "customer"
         )
-        self._record_price_fetch(
-            "price_selection", outcome, start_date, user_prices
-        )
+        self._record_price_fetch("price_selection", outcome, start_date, user_prices)
         return user_prices
 
     async def _handle_fetch_exceptions(self, ex: Exception) -> None:
