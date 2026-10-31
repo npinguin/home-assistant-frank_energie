@@ -147,7 +147,7 @@ class ConfigFlow(config_entries.ConfigFlow):
         except ConnectionException:
             # Network/API issues
             return await self._handle_authentication_failure(reason="connection_error")
-        except Exception as ex:
+        except Exception:
             # Catch-all for unexpected errors
             _LOGGER.exception("Unexpected error during Frank Energie login")
             return await self._handle_authentication_failure(reason="unknown_error")
