@@ -1,0 +1,144 @@
+"""Price-source truth for Belgian MODEL contracts and other sites.
+
+These regressions change diagnostic provenance only, not prices, HA entity IDs
+or Recorder histories. Synthetic values deliberately contain no account data.
+"""
+
+from datetime import date
+from unittest.mock import AsyncMock, MagicMock
+
+import pytest
+from python_frank_energie.models import MarketPrices, PriceData
+
+from custom_components.frank_energie.coordinator import (
+    FrankEnergiePriceCoordinator,
+    _price_selection_outcome,
+)
+
+
+def _prices(electricity: bool = False, gas: bool = False) -> MarketPrices:
+    point = {
+        "from": "2026-10-31T12:00:00+00:00",
+        "till": "2026-10-31T13:00:00+00:00",
+        "marketPrice": 0.12,
+        "marketPriceTax": 0.02,
+        "sourcingMarkupPrice": 0.01,
+        "energyTaxPrice": 0.10,
+    }
+    return MarketPrices(
+        electricity=PriceData(
+            [point] if electricity else [], energy_type="electricity"
+        ),
+        gas=PriceData([point] if gas else [], energy_type="gas"),
+        energy_country="BE",
+    )
+
+
+@pytest.mark.parametrize(
+    ("selected_electricity", "selected_gas", "customer_electricity",
+     "customer_gas", "authenticated", "cached", "expected"),
+    [
+        (False, False, False, False, True, False, "not_available"),
+        (False, False, False, False, False, False, "not_available"),
+        (True, True, False, False, True, False, "public_fallback"),
+        (True, True, False, False, True, True, "cached_fallback"),
+        (True, False, True, False, True, False, "customer"),
+        (True, True, True, False, True, False, "mixed"),
+        (True, True, True, True, True, False, "customer"),
+        (True, True, False, False, False, False, "public"),
+        (True, True, False, False, False, True, "cached_fallback"),
+    ],
+)
+def test_selected_slot_provenance_is_not_a_success_flag(
+    selected_electricity,
+    selected_gas,
+    customer_electricity,
+    customer_gas,
+    authenticated,
+    cached,
+    expected,
+):
+    selected = _prices(selected_electricity, selected_gas)
+    assert _price_selection_outcome(
+        selected,
+        authenticated=authenticated,
+        customer_electricity=customer_electricity,
+        customer_gas=customer_gas,
+        fallback_from_cache=cached,
+    ) == expected
+
+
+def _coordinator(authenticated: bool = True) -> FrankEnergiePriceCoordinator:
+    hass = MagicMock()
+    hass.config.country = "BE"
+    entry = MagicMock()
+    entry.options = {"resolution": "PT15M"}
+    entry.data = {"site_reference": "synthetic-reference"}
+    api = MagicMock()
+    api.is_authenticated = authenticated
+    coordinator = FrankEnergiePriceCoordinator(hass, entry, api, MagicMock())
+    coordinator.user_electricity_enabled = True
+    coordinator.user_gas_enabled = True
+    coordinator._record_price_fetch = MagicMock()
+    return coordinator
+
+
+@pytest.mark.asyncio
+async def test_model_public_prices_do_not_become_customer_provenance():
+    """A variable MODEL tariff must not claim spot prices as its customer rate."""
+    coordinator = _coordinator()
+    public = _prices(True, True)
+    coordinator._fetch_public_prices_for_range = AsyncMock(return_value=public)
+    coordinator._fetch_user_prices_for_range = AsyncMock(return_value=_prices())
+    selected = await coordinator._fetch_prices_with_fallback(
+        date(2026, 10, 31), date(2026, 11, 1)
+    )
+    assert selected is not None
+    assert len(selected.electricity.all) == 1
+    assert len(selected.gas.all) == 1
+    assert coordinator._record_price_fetch.call_args.args[1] == "public_fallback"
+
+
+@pytest.mark.asyncio
+async def test_both_sources_empty_cannot_be_mislabeled_as_fallback():
+    coordinator = _coordinator()
+    coordinator._fetch_public_prices_for_range = AsyncMock(return_value=None)
+    coordinator._fetch_user_prices_for_range = AsyncMock(return_value=None)
+    selected = await coordinator._fetch_prices_with_fallback(
+        date(2026, 10, 31), date(2026, 11, 1)
+    )
+    assert selected is not None
+    assert not selected.electricity.all
+    assert not selected.gas.all
+    assert coordinator._record_price_fetch.call_args.args[1] == "not_available"
+
+
+@pytest.mark.asyncio
+async def test_partial_customer_no_public_slots_stays_customer_not_mixed():
+    coordinator = _coordinator()
+    coordinator._fetch_public_prices_for_range = AsyncMock(
+        return_value=_prices()
+    )
+    coordinator._fetch_user_prices_for_range = AsyncMock(
+        return_value=_prices(electricity=True)
+    )
+    selected = await coordinator._fetch_prices_with_fallback(
+        date(2026, 10, 31), date(2026, 11, 1)
+    )
+    assert selected is not None
+    assert len(selected.electricity.all) == 1
+    assert not selected.gas.all
+    assert coordinator._record_price_fetch.call_args.args[1] == "customer"
+
+
+@pytest.mark.asyncio
+async def test_cache_is_never_misreported_as_fresh_public_feed():
+    coordinator = _coordinator()
+    coordinator._cached_prices = _prices(electricity=True)
+    coordinator._fetch_public_prices_for_range = AsyncMock(return_value=None)
+    coordinator._fetch_user_prices_for_range = AsyncMock(return_value=None)
+    selected = await coordinator._fetch_prices_with_fallback(
+        date(2026, 10, 31), date(2026, 11, 1)
+    )
+    assert selected is coordinator._cached_prices
+    assert coordinator._record_price_fetch.call_args.args[1] == "cached_fallback"
