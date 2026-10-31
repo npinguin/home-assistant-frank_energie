@@ -16,6 +16,52 @@ versioned before live acceptance precisely to obtain new diagnostics.
 The test release publisher is scoped to this single branch and exact-SHA
 CI, HACS/Hassfest and immutable ZIP/checksum verification.
 
+## HA device freshness after installing v2026.11.1.1
+
+A follow-up live HA 2026.10.4 diagnostics export confirms the immutable
+2026.11.1.1 test candidate is installed and its selected-site flags
+(`electricity=true`, `gas=true`) and BE `MODEL` dataclass metadata are
+correct. It was captured around 00:21 Europe/Brussels on 2026-11-01.
+
+- All three coordinators have `last_update_success=true` and source
+  GraphQL operations respond. This **does not establish** that an individual
+  HA sensor has a current value, or that provider readings are recent.
+- For 2026-11-01 the effective customer source contains **24 hourly
+  electricity prices and 6 hourly gas prices**. `last_fetch_tomorrow=null`
+  is expected around midnight; next-day prices are not due before the
+  publication window.
+- `MonthSummary`, `Invoices`, and `PeriodUsageAndCosts` objects exist,
+  but the old diagnostics show only **object presence**, not actual usage
+  segment values, invoice age or last meter reading age.
+- Monthly finance remains opt-in OFF, so no monthly finance entities are
+  registered. Do not create artificial monthly totals or enable unstable
+  finance just to make the HA device appear populated.
+- A source-code audit against HA Core 2026.10.4 confirms
+  `CoordinatorEntity._handle_coordinator_update` writes state and the
+  existing `FrankEnergieSensor.native_value` **already computes the current
+  coordinator data**. Do not introduce a second manual refresh or rewrite
+  this working contract merely because a user's device page shows no
+  recent activity; HA's `last_changed` is not `last_reported`.
+- **Real device defect:** the `meterType` sensor's per-segment extractor
+  discarded all actual pinned-client `Connection` dataclasses, even though
+  those source values exist. Fixed against `Connection.from_dict` fixtures
+  in the same PR, retaining sensor identity.
+- Added strictly sanitized evidence: age of the source last meter
+  reading, per-segment usage item counts and reported-total presence,
+  count/latest age of invoices, current price-slot presence, and actual
+  HA entity availability and last-report recency grouped by whitelisted
+  service names. No account IDs, values or provider-supplied arbitrary
+  device names are exported.
+
+**Next acceptance:** after a **standard-lifecycle** test candidate is
+published from these changes, capture HA diagnostics and compare the
+`ha_entity_state_summary.by_service`, `provider_data_freshness`,
+`price_coverage.has_current_price` fields. Confirm individual price,
+meter, cost and usage entity states and Recorder writes; only then
+attribute absent values to upstream delay, sensor parsing or registry
+configuration. Preserve `main`, published tags and all existing unique IDs
+until verified.
+
 ## Governance correction — v2026.11.1.1 (2026-10-31)
 
 **Published HACS prerelease**, immutable tag at
