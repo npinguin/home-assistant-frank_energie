@@ -367,12 +367,16 @@ def _safe_contract_capabilities(settings_data: object) -> dict[str, object]:
 
 def _safe_ha_entity_state_summary(
     hass: HomeAssistant, entry: ConfigEntry
-) -> dict[str, int]:
+) -> dict[str, object]:
     """Summarize actual HA entity states without names, values or identifiers.
 
     last_reported tracks state writes, including unchanged values, while
     last_changed cannot be used as an update/freshness indicator.
     """
+    # Isolated diagnostics unit tests sometimes use a MagicMock in place of
+    # HomeAssistant. Do not make a fake registry look like live HA evidence.
+    if not isinstance(hass, HomeAssistant):
+        return {"configured": False}
     registry = er.async_get(hass)
     summary = {
         "registered": 0,
