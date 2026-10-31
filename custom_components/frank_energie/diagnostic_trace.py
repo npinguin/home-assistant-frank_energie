@@ -99,8 +99,8 @@ def _response_metadata(response: object) -> dict[str, object]:
 
     result: dict[str, object] = {"response_kind": "graphql"}
     errors = response.get("errors")
-    result["graphql_error_count"] = len(errors) if isinstance(errors, list) else (
-        1 if errors else 0
+    result["graphql_error_count"] = (
+        len(errors) if isinstance(errors, list) else (1 if errors else 0)
     )
     data = response.get("data")
     if not isinstance(data, dict):
