@@ -1486,6 +1486,48 @@ def test_meter_type_preserves_electricity_and_gas_without_new_entities() -> None
     }
 
 
+
+def test_real_client_connection_objects_populate_existing_meter_sensor() -> None:
+    """Installed pinned client returns Connection models, not dictionaries."""
+    from types import SimpleNamespace
+
+    from python_frank_energie.models import Connection
+
+    from custom_components.frank_energie.sensor import SENSOR_TYPES
+
+    description = next(d for d in SENSOR_TYPES if d.key == "meterType")
+    gas = Connection.from_dict({"segment": "GAS", "meterType": "SMR1"})
+    electricity = Connection.from_dict(
+        {"segment": "ELECTRICITY", "meterType": "SMR3"}
+    )
+    source = {
+        const.DATA_USER: SimpleNamespace(connections=[gas, electricity])
+    }
+    assert description.value_fn(source) == "smr3"
+    assert description.attr_fn(source)["meter_types_by_segment"] == {
+        "gas": "smr1",
+        "electricity": "smr3",
+    }
+
+
+def test_unrecognized_connection_representation_is_safely_ignored() -> None:
+    from types import SimpleNamespace
+
+    from custom_components.frank_energie.sensor import SENSOR_TYPES
+
+    description = next(d for d in SENSOR_TYPES if d.key == "meterType")
+    source = {
+        const.DATA_USER: SimpleNamespace(
+            connections=[
+                object(),
+                SimpleNamespace(segment="ELECTRICITY", meterType=None),
+            ]
+        )
+    }
+    assert description.value_fn(source) is None
+    assert description.attr_fn(source)["meter_types_by_segment"] == {}
+
+
 def test_account_enum_options_match_shipped_translations() -> None:
     """HA enum options must have labels in every supported shipped language."""
     import json
