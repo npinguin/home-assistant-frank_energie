@@ -43,7 +43,8 @@ def test_hacs_candidate_is_full_zip_pre_release_not_default_branch():
     assert "Hassfest Home Assistant validation" in publisher
     assert "HACS integration validation" in publisher
     assert TAG in publisher
-    assert "v2026.10.31.2" not in publisher
+    assert "TAG=v2026.11.1.1" in publisher
+    assert "BLOCK: immutable Git tag already exists" in publisher
 
 
 def test_live_acceptance_and_backout_are_explicit():
