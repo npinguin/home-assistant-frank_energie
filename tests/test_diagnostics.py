@@ -255,3 +255,68 @@ async def test_diagnostics_coordinator_metadata() -> None:
     assert coordinator_data["resolution_change_pending"] is True
 
     assert diagnostics["battery_session_coordinators"] == 2
+
+
+@pytest.mark.asyncio
+async def test_diagnostics_distinguish_coordinator_health_from_data_coverage() -> None:
+    """Price success must not be mistaken for successful monthly accounting."""
+    price = SimpleNamespace(
+        last_update_success=True,
+        update_interval=timedelta(minutes=60),
+        data={
+            "electricity": SimpleNamespace(prices=[], resolution_minutes=60),
+            "gas": SimpleNamespace(prices=[], resolution_minutes=60),
+        },
+    )
+    statistics = SimpleNamespace(
+        last_update_success=False,
+        update_interval=timedelta(hours=1),
+        data={
+            "month_summary": None,
+            "invoices": None,
+            "usage": None,
+            "month_insights_current": None,
+            "month_insights_previous": None,
+        },
+    )
+    coordinator = SimpleNamespace(
+        last_update_success=True,
+        update_interval=timedelta(minutes=60),
+        site_reference="private",
+        country_code="BE",
+        _user_country="BE",
+        resolution="PT15M",
+        api_resolution=None,
+        user_electricity_enabled=False,
+        user_gas_enabled=False,
+        last_fetch_today=None,
+        last_fetch_tomorrow=None,
+        cached_prices=None,
+        cached_prices_today=None,
+        cached_prices_tomorrow=None,
+        _resolution_change_pending=False,
+        data=price.data,
+    )
+    runtime = SimpleNamespace(
+        coordinator=coordinator,
+        price_coordinator=price,
+        statistics_coordinator=statistics,
+        battery_session_coordinators={},
+    )
+    entry = MagicMock()
+    entry.entry_id = "private-entry"
+    entry.title = "Private address"
+    entry.data = {"site_reference": "private"}
+    entry.options = {"username": "private-email"}
+    entry.runtime_data = runtime
+
+    diagnostics = await async_get_config_entry_diagnostics(MagicMock(), entry)
+    evidence = diagnostics["coordinator_evidence"]
+    assert evidence["price"]["last_update_success"] is True
+    assert evidence["statistics"]["last_update_success"] is False
+    assert evidence["price_coverage"]["electricity"]["price_points"] == 0
+    assert evidence["price_coverage"]["electricity"]["resolution_minutes"] == 60
+    assert evidence["finance_coverage"]["month_summary"] is False
+    assert evidence["finance_coverage"]["month_insights_previous"] is False
+    assert evidence["finance_coverage"]["invoices"] is False
+    assert "private" not in str(evidence)
