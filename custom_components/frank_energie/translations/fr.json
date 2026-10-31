@@ -715,7 +715,7 @@
         "name": "Date de dernière relève de compteur"
       },
       "meter_type": {
-        "name": "Type de compteur",
+        "name": "Code compteur (API Frank)",
         "state": {
           "slm": "Compteur intelligent",
           "smr1": "SMR1",
