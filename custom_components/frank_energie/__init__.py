@@ -40,6 +40,7 @@ from .coordinator import (
     FrankEnergieVehicleCoordinator,
     FrankEnergieStatisticsCoordinator,
 )
+from .diagnostic_trace import DiagnosticTrace, attach_graphql_trace
 from .exceptions import NoSuitableSitesFoundError
 from .helpers import price_cache_store
 
@@ -247,6 +248,12 @@ class FrankEnergieComponent:  # pylint: disable=too-few-public-methods
             auth_token=self.entry.data.get(CONF_ACCESS_TOKEN),
             refresh_token=self.entry.data.get(CONF_TOKEN),
         )
+
+        # Observe the actual authenticated GraphQL POST boundary, including
+        # source errors before the client parses them. No extra API calls and
+        # no query variables, HTTP headers or response values are retained.
+        diagnostic_trace = DiagnosticTrace()
+        attach_graphql_trace(api, diagnostic_trace, "graphql_account")
 
         settings_coordinator = FrankEnergieSettingsCoordinator(
             self.hass, self.entry, api
