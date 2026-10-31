@@ -77,6 +77,18 @@ TO_REDACT: set[str] = {
     "deviceId",
     "installation_id",
     "installationId",
+    "id",
+    "entry_id",
+    "userId",
+    "mandateId",
+    "fromName",
+    "slug",
+    "InviteLinkUser",
+    "activePaymentAuthorization",
+    "PaymentAuthorizations",
+    "Signup",
+    "advancedPaymentAmount",
+    "discountPerConnection",
 }
 
 
@@ -178,6 +190,59 @@ def _safe_finance_coverage(data: object) -> dict[str, object]:
     return result
 
 
+
+def _safe_contract_capabilities(settings_data: object) -> dict[str, object]:
+    """Describe source-reported tariff and meter metadata without account PII.
+
+    MODEL means a variable commercial contract, not an hourly dynamic
+    customer tariff. SMR1/SMR3 are opaque provider codes, not proof of a
+    particular physical meter or reading frequency.
+    """
+    if not isinstance(settings_data, dict):
+        return {}
+
+    sites = settings_data.get("user_sites")
+    proposition = getattr(sites, "propositionType", None)
+    if not isinstance(proposition, str):
+        proposition = None
+
+    user = settings_data.get("user")
+    connections = getattr(user, "connections", None) or []
+    segments: dict[str, object] = {}
+    for connection in connections:
+        if not isinstance(connection, dict):
+            continue
+        segment = connection.get("segment")
+        if not isinstance(segment, str) or segment.upper() not in ("ELECTRICITY", "GAS"):
+            continue
+        segment_key = segment.lower()
+        external = connection.get("externalDetails") or {}
+        contract = external.get("contract") if isinstance(external, dict) else None
+        if not isinstance(contract, dict):
+            contract = {}
+        reported_meter_code = connection.get("meterType")
+        contract_type = contract.get("contractType")
+        segments[segment_key] = {
+            "contract_type": (
+                contract_type.lower() if isinstance(contract_type, str) else None
+            ),
+            "reported_meter_code": (
+                reported_meter_code.upper()
+                if isinstance(reported_meter_code, str)
+                else None
+            ),
+            "last_meter_reading_reported": bool(connection.get("lastMeterReadingDate")),
+        }
+
+    model = proposition.upper() if proposition else None
+    return {
+        "proposition_type": model,
+        "variable_contract": model == "MODEL" if model else None,
+        "meter_code_source": "frank_api_metadata",
+        "segments": segments,
+    }
+
+
 async def async_get_config_entry_diagnostics(
     hass: HomeAssistant,
     entry: ConfigEntry,
@@ -237,6 +302,9 @@ async def async_get_config_entry_diagnostics(
                 getattr(
                     getattr(runtime_data, "statistics_coordinator", None), "data", None
                 )
+            ),
+            "contract_capabilities": _safe_contract_capabilities(
+                getattr(getattr(runtime_data, "settings_coordinator", None), "data", None)
             ),
         },
     }
