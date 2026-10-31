@@ -3234,7 +3234,14 @@ class FrankEnergieStatisticsCoordinator(FrankEnergieCoordinator):
             RequestException,
             FrankEnergieException,
             ClientError,
+            TimeoutError,
+            ValueError,
+            TypeError,
+            KeyError,
         ) as ex:
+            # This optional endpoint may return incomplete or malformed data
+            # during publication lag. Do not take down existing daily usage,
+            # invoice, or month-summary sensors because parsing it failed.
             _LOGGER.debug(
                 "Month insights unavailable for %s (%s)", period, type(ex).__name__
             )
@@ -3253,8 +3260,10 @@ class FrankEnergieStatisticsCoordinator(FrankEnergieCoordinator):
         if key == self._previous_finance_cache_key:
             return self._previous_finance_snapshot
         snapshot = await self._fetch_monthly_insights(period)
+        # Cache only a real response. A transient empty/error response must
+        # not suppress recovery for a whole day (especially at month rollover).
         self._previous_finance_snapshot = snapshot
-        self._previous_finance_cache_key = key
+        self._previous_finance_cache_key = key if snapshot is not None else None
         return snapshot
 
     async def _async_update_data(self) -> FrankEnergieData:
