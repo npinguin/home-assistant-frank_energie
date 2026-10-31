@@ -193,3 +193,44 @@ def test_selected_site_flags_are_case_normalized_and_fail_closed_on_missing_data
     assert _site_segment_flags(sites, "site-a") == (True, True)
     sites.deliverySites[0].segments = None
     assert _site_segment_flags(sites, "site-a") == (True, False)
+
+
+@pytest.mark.asyncio
+async def test_price_refresh_reconciles_flags_from_selected_site_before_fetching():
+    """Real price coordinator previously kept both flags permanently False."""
+    coordinator = _coordinator()
+    coordinator.settings_coordinator.data = {
+        "user": None,
+        "user_sites": SimpleNamespace(
+            reference="synthetic-reference",
+            segments=["ELECTRICITY", "GAS"],
+            deliverySites=[
+                SimpleNamespace(
+                    reference="synthetic-reference",
+                    segments=["ELECTRICITY", "GAS"],
+                )
+            ],
+        ),
+    }
+    coordinator._should_skip_api_calls = MagicMock(return_value=False)
+    coordinator._reconcile_resolution = MagicMock()
+    coordinator._adjust_update_interval = MagicMock()
+    coordinator._update_today_prices = MagicMock()
+    coordinator._aggregate_data = MagicMock(return_value={})
+    coordinator._maybe_fire_lowest_price_event = MagicMock()
+    coordinator._maybe_fire_lowest_4p_event = MagicMock()
+    coordinator._maybe_fire_lowest_16p_event = MagicMock()
+    coordinator._fetch_contract_price_resolution_state = AsyncMock(return_value=None)
+    coordinator._refresh_tomorrow_cache = AsyncMock(return_value=None)
+    coordinator.store.async_save = AsyncMock()
+
+    async def assert_flags_on_fetch(*args, **kwargs):
+        assert coordinator.user_electricity_enabled is True
+        assert coordinator.user_gas_enabled is True
+        return _prices(electricity=True, gas=True)
+
+    coordinator._fetch_prices_with_fallback = AsyncMock(
+        side_effect=assert_flags_on_fetch
+    )
+    await coordinator._async_update_data()
+    coordinator._fetch_prices_with_fallback.assert_awaited_once()
