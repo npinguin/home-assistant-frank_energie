@@ -239,11 +239,15 @@ def _price_counts(market_prices: MarketPrices | None) -> tuple[int, int]:
     """
     if market_prices is None:
         return 0, 0
-    electricity_count = (
-        len(market_prices.electricity.all) if market_prices.electricity else 0
+    # Test doubles and partially parsed responses may be non-MarketPrices
+    # sentinel objects. Observability must NEVER break a provider call just
+    # because the returned object has no electricity/gas stream.
+    electricity = getattr(getattr(market_prices, "electricity", None), "all", None)
+    gas = getattr(getattr(market_prices, "gas", None), "all", None)
+    return (
+        len(electricity) if isinstance(electricity, (list, tuple)) else 0,
+        len(gas) if isinstance(gas, (list, tuple)) else 0,
     )
-    gas_count = len(market_prices.gas.all) if market_prices.gas else 0
-    return electricity_count, gas_count
 
 
 def _resolution_state_to_dict(state: ContractPriceResolutionState) -> dict[str, Any]:
