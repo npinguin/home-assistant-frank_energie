@@ -253,3 +253,28 @@ def test_actual_pinned_user_sites_parser_preserves_selected_site_isolation():
     assert _site_segment_flags(sites, "site-a") == (True, True)
     assert _site_segment_flags(sites, "site-b") == (False, True)
     assert _site_segment_flags(sites, "missing-site") == (False, False)
+
+@pytest.mark.asyncio
+async def test_cached_first_refresh_checks_selected_site_before_skipping_api() -> None:
+    """A partial cache cannot hide a subscribed gas segment at startup."""
+    coordinator = _coordinator()
+    coordinator.user_electricity_enabled = False
+    coordinator.user_gas_enabled = False
+    coordinator.settings_coordinator.data = {
+        "user_sites": SimpleNamespace(
+            deliverySites=[
+                SimpleNamespace(
+                    reference="synthetic-reference",
+                    segments=["ELECTRICITY", "GAS"],
+                )
+            ]
+        )
+    }
+    coordinator._async_setup = AsyncMock(return_value=True)
+    coordinator._is_cache_fresh = MagicMock(return_value=True)
+
+    await coordinator.async_config_entry_first_refresh()
+
+    assert coordinator.user_electricity_enabled
+    assert coordinator.user_gas_enabled
+    coordinator._is_cache_fresh.assert_called_once()
