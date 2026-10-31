@@ -690,18 +690,31 @@ class FrankEnergieCoordinator(DataUpdateCoordinator[FrankEnergieData]):
         that is stale, so rejecting anything past tomorrow would discard
         legitimately-cached multi-day data.
         """
-        price_series = (
-            cached_prices_tomorrow.electricity or cached_prices_tomorrow.gas
-            if cached_prices_tomorrow
-            else None
-        )
-        if not price_series or not price_series.all:
+        if cached_prices_tomorrow is None:
+            return False
+
+        # Both segments must be checked. An empty electricity PriceData is
+        # truthy, so the old "electricity or gas" expression hid valid gas-only
+        # data. It also trusted tomorrow-dated electricity even if the gas
+        # portion still contained yesterday's prices.
+        prices = [
+            price
+            for segment in (
+                cached_prices_tomorrow.electricity,
+                cached_prices_tomorrow.gas,
+            )
+            if segment is not None
+            for price in segment.all
+        ]
+        if not prices:
             return False
 
         tz_amsterdam = ZoneInfo(TIMEZONE_AMSTERDAM)
         return all(
-            price.date_from.astimezone(tz_amsterdam).date() >= tomorrow
-            for price in price_series.all
+            isinstance(price.date_from, datetime)
+            and price.date_from.tzinfo is not None
+            and price.date_from.astimezone(tz_amsterdam).date() >= tomorrow
+            for price in prices
         )
 
     async def _refresh_tomorrow_cache(
