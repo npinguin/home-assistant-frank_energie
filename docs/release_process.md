@@ -337,3 +337,24 @@ Contributors are encouraged to:
 - events.md
 - faq.md
 - user_features.md
+## Documentation publishing in this fork
+
+This fork distributes the Home Assistant integration through HACS. Its maintained user
+and contributor documentation is Markdown in `README.md` and `docs/`, linked directly
+from GitHub. **Docusaurus Pages is not a release deliverable for this fork.**
+
+On 2026-10-31, the obsolete `Deploy Docusaurus to GitHub Pages` workflow was retired
+(see issue #9): the repository has a legacy `docusaurus.config.js` but **no**
+`package.json` or npm/yarn lockfile, so `npm ci` / `npm run build` could never run
+reproducibly. This was a pre-existing failure, not a regression of the Python
+integration. Do not claim docs Pages deployment as a passing gate.
+
+If Pages publishing becomes a requirement, introduce and review a complete Node
+project with a committed lockfile and a working build, then separately reinstate
+Pages CI. The Python test, Ruff, HACS and Hassfest validation remain independent.
+
+## Event-specific labeling governance
+
+The shared issue/PR title labeler runs on both issue and PR events. File-path and
+size labeling are **PR-only** and must never run on issue events or on closed PRs.
+This avoids the API failure tracked in issue #10 without removing issue triage.
