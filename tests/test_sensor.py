@@ -1486,7 +1486,6 @@ def test_meter_type_preserves_electricity_and_gas_without_new_entities() -> None
     }
 
 
-
 def test_real_client_connection_objects_populate_existing_meter_sensor() -> None:
     """Installed pinned client returns Connection models, not dictionaries."""
     from types import SimpleNamespace
@@ -1497,12 +1496,8 @@ def test_real_client_connection_objects_populate_existing_meter_sensor() -> None
 
     description = next(d for d in SENSOR_TYPES if d.key == "meterType")
     gas = Connection.from_dict({"segment": "GAS", "meterType": "SMR1"})
-    electricity = Connection.from_dict(
-        {"segment": "ELECTRICITY", "meterType": "SMR3"}
-    )
-    source = {
-        const.DATA_USER: SimpleNamespace(connections=[gas, electricity])
-    }
+    electricity = Connection.from_dict({"segment": "ELECTRICITY", "meterType": "SMR3"})
+    source = {const.DATA_USER: SimpleNamespace(connections=[gas, electricity])}
     assert description.value_fn(source) == "smr3"
     assert description.attr_fn(source)["meter_types_by_segment"] == {
         "gas": "smr1",
