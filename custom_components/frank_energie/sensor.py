@@ -1732,12 +1732,17 @@ def _get_user_meter_types_by_segment(data: dict) -> dict[str, str]:
     connections = getattr(user, "connections", None) or []
     types: dict[str, str] = {}
     for index, connection in enumerate(connections, start=1):
-        if not isinstance(connection, dict):
-            continue
-        raw_type = connection.get("meterType")
+        # The pinned API client parses GraphQL connections as Connection
+        # dataclasses, not plain dicts. Retain support for both representations
+        # without exposing any IDs or altering the existing meter entity.
+        if isinstance(connection, dict):
+            raw_type = connection.get("meterType")
+            segment = connection.get("segment")
+        else:
+            raw_type = getattr(connection, "meterType", None)
+            segment = getattr(connection, "segment", None)
         if not isinstance(raw_type, str) or not raw_type.strip():
             continue
-        segment = connection.get("segment")
         if not isinstance(segment, str) or not segment.strip():
             segment = f"connection_{index}"
         types[segment.strip().lower()] = raw_type.strip().lower()
