@@ -62,7 +62,9 @@ async def test_observer_records_real_query_and_never_stores_payload() -> None:
         operation_name="MarketPrices",
         variables={"date": "2026-10-31", "siteReference": "sensitive-site"},
     )
-    result = await client._query(query, extra_headers={"Authorization": "private-token"})
+    result = await client._query(
+        query, extra_headers={"Authorization": "private-token"}
+    )
     assert result is response
     assert len(calls) == 1
 
@@ -91,7 +93,9 @@ async def test_observer_captures_graphql_errors_and_reraises_network_failure() -
 
     client = SimpleNamespace(_query=graphql_errors)
     attach_graphql_trace(client, trace, "graphql_account")
-    query = SimpleNamespace(operation_name="MonthSummary", variables={"siteReference": "private"})
+    query = SimpleNamespace(
+        operation_name="MonthSummary", variables={"siteReference": "private"}
+    )
     await client._query(query)
     assert trace.snapshot()["events"][0]["outcome"] == "graphql_errors"
 
