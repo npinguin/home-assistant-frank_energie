@@ -2570,3 +2570,26 @@ async def test_complete_subscribed_gas_tomorrow_cache_avoids_repeat_call(
 
     assert await coordinator._refresh_tomorrow_cache(today, tomorrow, now_utc) is complete
     coordinator._fetch_tomorrow_data.assert_not_called()
+
+@pytest.mark.asyncio
+async def test_partial_tomorrow_retry_does_not_spam_available_event(
+    coordinator: FrankEnergieCoordinator,
+) -> None:
+    """Retrying incomplete gas coverage must not fire an event on every poll."""
+    today = date(2026, 7, 20)
+    tomorrow = date(2026, 7, 21)
+    now_utc = datetime(2026, 7, 20, 12, 0, tzinfo=UTC)
+    coordinator.user_electricity_enabled = True
+    coordinator.user_gas_enabled = True
+    partial = MarketPrices(
+        electricity=_day_prices(tomorrow, segment="electricity"),
+        gas=_day_prices(tomorrow, segment="gas", hours=6),
+        energy_country="BE",
+    )
+    coordinator._fetch_tomorrow_data = AsyncMock(return_value=partial)
+
+    await coordinator._refresh_tomorrow_cache(today, tomorrow, now_utc)
+    await coordinator._refresh_tomorrow_cache(today, tomorrow, now_utc)
+
+    assert coordinator._fetch_tomorrow_data.await_count == 2
+    coordinator.hass.bus.async_fire.assert_called_once()
