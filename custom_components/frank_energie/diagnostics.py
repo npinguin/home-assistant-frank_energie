@@ -128,7 +128,6 @@ def _serialize(value: object) -> object:
     return value
 
 
-
 def _bounded_coordinator_evidence(coordinator: object | None) -> dict[str, object]:
     """Expose coordinator liveness and coverage, never its customer payload."""
     if coordinator is None:
@@ -235,7 +234,9 @@ async def async_get_config_entry_diagnostics(
             ),
             "price_coverage": _safe_price_coverage(coordinator.data),
             "finance_coverage": _safe_finance_coverage(
-                getattr(getattr(runtime_data, "statistics_coordinator", None), "data", None)
+                getattr(
+                    getattr(runtime_data, "statistics_coordinator", None), "data", None
+                )
             ),
         },
     }
