@@ -14,6 +14,7 @@ import pytest
 
 from custom_components.frank_energie.diagnostics import (
     _safe_contract_capabilities,
+    _safe_price_coverage,
     _serialize,
     async_get_config_entry_diagnostics,
 )
@@ -443,3 +444,19 @@ async def test_diagnostics_redact_nested_provider_identifiers_and_payment_data()
     ):
         assert secret not in text
     assert diagnostics["entry"]["entry_id"] == "**REDACTED**"
+
+
+def test_price_coverage_counts_effective_prices_after_merge_not_raw_input() -> None:
+    """Merged PriceData keeps effective .all slots even when .prices is empty."""
+    from python_frank_energie.models import PriceData
+
+    electricity = PriceData(prices=[], energy_type="electricity")
+    electricity.price_data = [object(), object()]
+    gas = PriceData(prices=[], energy_type="gas")
+    coverage = _safe_price_coverage({"electricity": electricity, "gas": gas})
+
+    assert coverage["electricity"]["raw_input_price_points"] == 0
+    assert coverage["electricity"]["price_points"] == 2
+    assert coverage["electricity"]["has_price_points"] is True
+    assert coverage["gas"]["price_points"] == 0
+    assert coverage["gas"]["has_price_points"] is False
