@@ -173,7 +173,9 @@ class DiagnosticTrace:
         }
         if operation is not None:
             event["operation"] = (
-                operation if _SAFE_OPERATION.fullmatch(operation) else "unknown"
+                operation
+                if isinstance(operation, str) and _SAFE_OPERATION.fullmatch(operation)
+                else "unknown"
             )
         if (safe := _safe_period(period)) is not None:
             event["period"] = safe
@@ -230,30 +232,40 @@ def attach_graphql_trace(api: Any, trace: DiagnosticTrace, source: str) -> None:
         try:
             response = await original_query(query, extra_headers=extra_headers)
         except Exception as error:
+            # The collector must not mask or change the original API error.
+            try:
+                trace.record(
+                    source,
+                    "exception",
+                    operation=operation,
+                    period=period,
+                    duration_ms=round((time.monotonic() - start) * 1000),
+                    error=error,
+                )
+            except Exception:
+                pass
+            raise
+
+        # Neither malformed provider responses nor a future telemetry bug
+        # may prevent the actual client from returning its result unchanged.
+        try:
+            metadata = _response_metadata(response)
             trace.record(
                 source,
-                "exception",
+                (
+                    "empty_response"
+                    if metadata.get("response_kind") == "empty"
+                    else "graphql_errors"
+                    if metadata.get("graphql_error_count", 0)
+                    else "ok"
+                ),
                 operation=operation,
                 period=period,
                 duration_ms=round((time.monotonic() - start) * 1000),
-                error=error,
+                response=response,
             )
-            raise
-        metadata = _response_metadata(response)
-        trace.record(
-            source,
-            (
-                "empty_response"
-                if metadata.get("response_kind") == "empty"
-                else "graphql_errors"
-                if metadata.get("graphql_error_count", 0)
-                else "ok"
-            ),
-            operation=operation,
-            period=period,
-            duration_ms=round((time.monotonic() - start) * 1000),
-            response=response,
-        )
+        except Exception:
+            pass
         return response
 
     api._query = observed_query
