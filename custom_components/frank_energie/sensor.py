@@ -4548,9 +4548,7 @@ class FrankEnergieSensor(
             segment = "gas" if key.startswith("gas_") else "electricity"
             get_source = getattr(self.coordinator, "price_source_for", None)
             origin = (
-                get_source(
-                    segment, datetime.now(ZoneInfo(TIMEZONE_AMSTERDAM)).date()
-                )
+                get_source(segment, datetime.now(ZoneInfo(TIMEZONE_AMSTERDAM)).date())
                 if callable(get_source)
                 else "cached_or_unverified"
             )
