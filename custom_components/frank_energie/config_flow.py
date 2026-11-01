@@ -34,12 +34,14 @@ from .const import (
     CONF_INTERVAL_SETTINGS,
     CONF_INTERVAL_STATISTICS,
     CONF_MONTHLY_FINANCE_ENABLED,
+    CONF_MARKET_CHEAP_HOURS,
     CONF_INTERVAL_BATTERIES,
     CONF_INTERVAL_BATTERY_SESSIONS,
     CONF_INTERVAL_CHARGERS,
     CONF_INTERVAL_VEHICLES,
     CONF_INTERVAL_PV,
     DEFAULT_INTERVAL_SETTINGS,
+    DEFAULT_MARKET_CHEAP_HOURS,
     DEFAULT_INTERVAL_STATISTICS,
     DEFAULT_INTERVAL_BATTERIES,
     DEFAULT_INTERVAL_BATTERY_SESSIONS,
@@ -744,7 +746,7 @@ class ConfigFlow(config_entries.ConfigFlow):
             return FrankEnergieOptionsFlowHandler(entry_data)
 
         _LOGGER.debug("No site selected, no options flow available.")
-        return NoOptionsAvailableFlowHandler()
+        return FrankEnergiePublicOptionsFlowHandler()
 
     @staticmethod
     def _validate_login_input(user_input: dict[str, Any]) -> dict[str, str]:
@@ -815,6 +817,14 @@ class FrankEnergieOptionsFlowHandler(config_entries.OptionsFlow):
                 user_input.get(
                     CONF_MONTHLY_FINANCE_ENABLED,
                     entry.options.get(CONF_MONTHLY_FINANCE_ENABLED, False),
+                )
+            ),
+            CONF_MARKET_CHEAP_HOURS: int(
+                user_input.get(
+                    CONF_MARKET_CHEAP_HOURS,
+                    entry.options.get(
+                        CONF_MARKET_CHEAP_HOURS, DEFAULT_MARKET_CHEAP_HOURS
+                    ),
                 )
             ),
             CONF_INTERVAL_BATTERIES: int(
@@ -978,6 +988,16 @@ class FrankEnergieOptionsFlowHandler(config_entries.OptionsFlow):
                 CONF_MONTHLY_FINANCE_ENABLED,
                 default=entry.options.get(CONF_MONTHLY_FINANCE_ENABLED, False),
             ): bool,
+            vol.Required(
+                CONF_MARKET_CHEAP_HOURS,
+                default=entry.options.get(
+                    CONF_MARKET_CHEAP_HOURS, DEFAULT_MARKET_CHEAP_HOURS
+                ),
+            ): NumberSelector(
+                NumberSelectorConfig(
+                    min=1, max=12, step=1, mode=NumberSelectorMode.SLIDER
+                )
+            ),
         }
 
         if has_batteries:
@@ -1041,6 +1061,46 @@ class FrankEnergieOptionsFlowHandler(config_entries.OptionsFlow):
 
         return self.async_show_form(
             step_id="user", data_schema=data_schema, errors=errors
+        )
+
+
+class FrankEnergiePublicOptionsFlowHandler(config_entries.OptionsFlow):
+    """Expose safe market-signal settings without requiring customer login."""
+
+    async def async_step_init(
+        self, user_input: Optional[dict[str, Any]] = None
+    ) -> ConfigFlowResult:
+        """Configure cheapest market hours for an anonymous public feed."""
+        entry = self.config_entry
+        if user_input is not None:
+            value = int(user_input[CONF_MARKET_CHEAP_HOURS])
+            if 1 <= value <= 12:
+                return self.async_create_entry(
+                    title="",
+                    data={**entry.options, CONF_MARKET_CHEAP_HOURS: value},
+                )
+            return self.async_show_form(
+                step_id="init",
+                data_schema=vol.Schema({}),
+                errors={CONF_MARKET_CHEAP_HOURS: "invalid_value"},
+            )
+
+        return self.async_show_form(
+            step_id="init",
+            data_schema=vol.Schema(
+                {
+                    vol.Required(
+                        CONF_MARKET_CHEAP_HOURS,
+                        default=entry.options.get(
+                            CONF_MARKET_CHEAP_HOURS, DEFAULT_MARKET_CHEAP_HOURS
+                        ),
+                    ): NumberSelector(
+                        NumberSelectorConfig(
+                            min=1, max=12, step=1, mode=NumberSelectorMode.SLIDER
+                        )
+                    )
+                }
+            ),
         )
 
 

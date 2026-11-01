@@ -112,6 +112,7 @@ from .helpers import (
     resolve_gas_unit,
     service_device_info,
 )
+from .price_signal_entities import FrankEnergieMarketHourRankSensor
 from .statistics import lowest_window
 from .service_refresh import service_refreshes
 from .service_refresh_sensor import (
@@ -5524,6 +5525,9 @@ async def async_setup_entry(
                     FrankEnergieLastApiCheckSensor(service, config_entry, trace),
                 )
             )
+        refresh_entities.append(
+            FrankEnergieMarketHourRankSensor(price_coordinator, config_entry)
+        )
         async_add_entities(refresh_entities, update_before_add=False)
     except Exception:
         _LOGGER.exception("Failed to add entities for entry %s", config_entry.entry_id)

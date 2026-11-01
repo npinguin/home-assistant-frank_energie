@@ -592,3 +592,18 @@ coverage and requalifies the entire code on a new exact source SHA.
 A public HACS TEST release remains gated on Python 3.14/3.14.2 tests,
 Ruff, Quality Scale, Link Check, HACS, Hassfest and immutable checksum.
 `main` and prior releases remain unchanged.
+
+
+## 2026-11-01 — proposed v2026.11.1.6 market-automation signal
+
+Added complete-day market-component hour ranking and configurable cheapest X
+hours. Strictly time-weighted PT15M/PT60M aggregation with separate physical
+hours at DST transitions; never label this as a BE MODEL invoice/customer
+tariff or declare a partial day's prices cheapest. Configurable 1–12 market
+hours through authenticated and anonymous HA options without credentials for
+anonymous mode. Existing min/max/average, cache, refresh and financial
+entities are retained without new duplicate IDs. New code and regressions
+are branch-only until exact-source CI is green; previous HACS releases and
+main remain immutable. Official Flemish capacity tariffs rely on P1 import
+quarter-hour peaks, grid-operator rate and 12-month rolling billing, and
+belong in RHI Energy, not the Frank supplier client.

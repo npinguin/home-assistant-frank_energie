@@ -140,7 +140,13 @@ async def test_options_flow_without_site(hass: HomeAssistant, config_entry) -> N
     result = await hass.config_entries.options.async_init(config_entry.entry_id)
     assert result["type"] == FlowResultType.FORM
     assert result["step_id"] == "init"
-    assert result["errors"] == {"base": "You do not have to login for this entry."}
+    assert result["errors"] is None
+
+    result2 = await hass.config_entries.options.async_configure(
+        result["flow_id"], user_input={"market_cheap_hours": 5}
+    )
+    assert result2["type"] == FlowResultType.CREATE_ENTRY
+    assert config_entry.options["market_cheap_hours"] == 5
 
 
 async def test_login_validation_errors(hass: HomeAssistant) -> None:
