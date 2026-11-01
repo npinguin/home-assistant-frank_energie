@@ -19,6 +19,7 @@ from custom_components.frank_energie.service_refresh import (
     service_refreshes,
 )
 from custom_components.frank_energie.service_refresh_sensor import (
+    FrankEnergieLastApiCheckSensor,
     FrankEnergieRefreshIntervalSensor,
 )
 
@@ -165,4 +166,21 @@ def test_refresh_interval_sensor_updates_without_api_call():
     assert sensor.available is True
     coordinator.update_interval = timedelta(hours=2)
     assert sensor.native_value == 120
+    coordinator.async_request_refresh.assert_not_called()
+
+
+def test_last_api_check_is_real_source_timestamp_and_missing_is_unavailable():
+    coordinator = MagicMock(
+        update_interval=timedelta(minutes=60), last_update_success=True
+    )
+    service = RefreshService("costs", "Costs", coordinator, ("MonthSummary",))
+    entry = SimpleNamespace(entry_id="entry")
+    trace = DiagnosticTrace()
+    last = FrankEnergieLastApiCheckSensor(service, entry, trace)
+    assert last.available is False
+    assert last.native_value is None
+    trace.record("graphql_account", "ok", operation="MonthSummary")
+    assert last.available is True
+    assert last.native_value.tzinfo == UTC
+    assert last.unique_id == "entry_last_api_check_costs"
     coordinator.async_request_refresh.assert_not_called()
