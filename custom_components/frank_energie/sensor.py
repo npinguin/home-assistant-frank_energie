@@ -149,15 +149,15 @@ _PRICE_SOURCE_ENTITY_KEYS: Final[frozenset[str]] = frozenset(
     }
 )
 
+
 def _tomorrow_has_full_coverage(data: dict[str, Any], key: str) -> bool:
     """Require actual local calendar-day coverage, including 23/25h DST."""
     prices = data.get(key)
     if prices is None:
         return False
-    tomorrow = (
-        dt_util.now().astimezone(ZoneInfo(TIMEZONE_AMSTERDAM)).date()
-        + timedelta(days=1)
-    )
+    tomorrow = dt_util.now().astimezone(
+        ZoneInfo(TIMEZONE_AMSTERDAM)
+    ).date() + timedelta(days=1)
     return covers_local_day(prices, tomorrow)
 
 
@@ -2565,7 +2565,9 @@ SENSOR_TYPES: tuple[FrankEnergieEntityDescription, ...] = (
         state_class=SensorStateClass.TOTAL,
         service_name=SERVICE_NAME_GAS_PRICES,
         value_fn=lambda data: (
-            data[DATA_GAS].tomorrow_average_price if _tomorrow_has_full_coverage(data, DATA_GAS) and data[DATA_GAS] else None
+            data[DATA_GAS].tomorrow_average_price
+            if _tomorrow_has_full_coverage(data, DATA_GAS) and data[DATA_GAS]
+            else None
         ),
         # value_fn=lambda data: data[DATA_GAS].tomorrow_avg.total,
         # if data[DATA_GAS].tomorrow_avg else None,
@@ -2755,7 +2757,9 @@ SENSOR_TYPES: tuple[FrankEnergieEntityDescription, ...] = (
         service_name=SERVICE_NAME_GAS_PRICES,
         value_fn=lambda data: (
             data[DATA_GAS].tomorrow_prices_market
-            if _tomorrow_has_full_coverage(data, DATA_GAS) and data[DATA_GAS] and data[DATA_GAS].tomorrow_prices_market
+            if _tomorrow_has_full_coverage(data, DATA_GAS)
+            and data[DATA_GAS]
+            and data[DATA_GAS].tomorrow_prices_market
             else None
         ),
         attr_fn=lambda data: (
@@ -2778,7 +2782,9 @@ SENSOR_TYPES: tuple[FrankEnergieEntityDescription, ...] = (
         service_name=SERVICE_NAME_GAS_PRICES,
         value_fn=lambda data: (
             data[DATA_GAS].tomorrow_prices_market_tax
-            if _tomorrow_has_full_coverage(data, DATA_GAS) and data[DATA_GAS] and data[DATA_GAS].tomorrow_prices_market_tax
+            if _tomorrow_has_full_coverage(data, DATA_GAS)
+            and data[DATA_GAS]
+            and data[DATA_GAS].tomorrow_prices_market_tax
             else None
         ),
         attr_fn=lambda data: (
@@ -2801,7 +2807,9 @@ SENSOR_TYPES: tuple[FrankEnergieEntityDescription, ...] = (
         service_name=SERVICE_NAME_GAS_PRICES,
         value_fn=lambda data: (
             data[DATA_GAS].tomorrow_prices_market_tax_markup
-            if _tomorrow_has_full_coverage(data, DATA_GAS) and data[DATA_GAS] and data[DATA_GAS].tomorrow_prices_market_tax_markup
+            if _tomorrow_has_full_coverage(data, DATA_GAS)
+            and data[DATA_GAS]
+            and data[DATA_GAS].tomorrow_prices_market_tax_markup
             else None
         ),
         attr_fn=lambda data: (
@@ -2849,7 +2857,9 @@ SENSOR_TYPES: tuple[FrankEnergieEntityDescription, ...] = (
         service_name=SERVICE_NAME_GAS_PRICES,
         value_fn=lambda data: (
             data[DATA_GAS].tomorrow_prices_total
-            if _tomorrow_has_full_coverage(data, DATA_GAS) and data[DATA_GAS] and data[DATA_GAS].tomorrow_prices_total
+            if _tomorrow_has_full_coverage(data, DATA_GAS)
+            and data[DATA_GAS]
+            and data[DATA_GAS].tomorrow_prices_total
             else None
         ),
         attr_fn=lambda data: (
@@ -2872,7 +2882,9 @@ SENSOR_TYPES: tuple[FrankEnergieEntityDescription, ...] = (
         service_name=SERVICE_NAME_GAS_PRICES,
         value_fn=lambda data: (
             data[DATA_GAS].tomorrow_min.total
-            if _tomorrow_has_full_coverage(data, DATA_GAS) and data[DATA_GAS] and data[DATA_GAS].tomorrow_min
+            if _tomorrow_has_full_coverage(data, DATA_GAS)
+            and data[DATA_GAS]
+            and data[DATA_GAS].tomorrow_min
             else None
         ),
         attr_fn=lambda data: (
@@ -2894,7 +2906,9 @@ SENSOR_TYPES: tuple[FrankEnergieEntityDescription, ...] = (
         service_name=SERVICE_NAME_GAS_PRICES,
         value_fn=lambda data: (
             data[DATA_GAS].tomorrow_max.total
-            if _tomorrow_has_full_coverage(data, DATA_GAS) and data[DATA_GAS] and data[DATA_GAS].tomorrow_max
+            if _tomorrow_has_full_coverage(data, DATA_GAS)
+            and data[DATA_GAS]
+            and data[DATA_GAS].tomorrow_max
             else None
         ),
         attr_fn=lambda data: (
@@ -5219,9 +5233,7 @@ def _monthly_finance_descriptions() -> tuple[FrankEnergieEntityDescription, ...]
                     "provider_total_missing",
                     "provider_components_present",
                 ],
-                value_fn=lambda data, k=data_key: finance_period_readiness(
-                    data.get(k)
-                ),
+                value_fn=lambda data, k=data_key: finance_period_readiness(data.get(k)),
                 attr_fn=lambda data, k=data_key: finance_period_readiness_attributes(
                     data.get(k)
                 ),
