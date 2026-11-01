@@ -71,6 +71,7 @@ _OUTCOMES: Final[frozenset[str]] = frozenset(
         "not_available",
         "recovery_requested",
         "refresh_ok",
+        "refresh_incomplete",
         "refresh_failed",
         "skipped_maintenance",
     }
