@@ -3521,9 +3521,10 @@ class FrankEnergieStatisticsCoordinator(FrankEnergieCoordinator):
             return None
         if result is None:
             return None
+        selected_electricity: bool | None = None
         selected_gas: bool | None = None
         if self.settings_coordinator.data:
-            _elec, selected_gas = _site_segment_flags(
+            selected_electricity, selected_gas = _site_segment_flags(
                 self.settings_coordinator.data.get(DATA_USER_SITES),
                 self.site_reference,
             )
@@ -3533,6 +3534,7 @@ class FrankEnergieStatisticsCoordinator(FrankEnergieCoordinator):
             retrieved_at=datetime.now(ZoneInfo("UTC")),
             source_states=self._diagnostic_trace.source_states_for_month(period),
             gas_expected=selected_gas,
+            electricity_expected=selected_electricity,
         )
 
     async def _fetch_previous_finance(
