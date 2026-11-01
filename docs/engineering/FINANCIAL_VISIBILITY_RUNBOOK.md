@@ -75,3 +75,7 @@ The authenticated selected Belgian site has both electricity and gas contracted;
 ## Start here next time
 
 Open this runbook, then `FRANK_FINANCE_MONTHLY_COSTS_TASK.md`, `BE_SOURCE_CONTRACTS.md`, `HA_ENERGY_BASIC_SOURCE_CONTRACT.md` and `RELEASE_TRAIN.md`. Tests: `test_finance.py`, `test_finance_coordinator.py`, `test_month_boundary_costs.py`, `test_diagnostics.py`, `test_price_coverage.py` and the specific updated finance/gas coverage regression tests. The unsolved product gap is **provider gas-financial data plus household-ledger reconciliation**, not a lack of additional price sensors.
+
+## Extra API finding: `meter_readings` is not a ready fallback
+
+Inspection of pinned `HiDiHo01/python-frank-energie` tag `v2026.9.20`, `frank_energie.py:578-613`: `meter_readings(site_reference)` declares a GraphQL `$siteReference` variable but does not use it in its selection. Its fields are `completenessPercentage`, `actualMeterReadings { date consumptionKwh }`, and `expectedMeterReadings { date consumptionKwh }` without money, gas `m³`, a typed segment or a proven site-scoped response. Its validity for this Belgian account is unverified. **Never** use this method to reconstruct gas euros, automatically query it at high frequency, or treat it as an invoice source. Investigate its schema only with an authorized bounded experiment and sanitized shape evidence; upstream Python-client correctness and a pinned release are separate gates.
