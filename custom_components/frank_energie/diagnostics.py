@@ -28,6 +28,7 @@ from . import FrankEnergieEntryData
 from .finance import finance_evidence
 from .service_refresh import service_refreshes, service_refresh_attributes
 from .source_checks import source_check_evidence
+from .price_coverage import covered_seconds_in_local_day, covers_local_day
 from .const import (
     SERVICE_NAME_COSTS,
     SERVICE_NAME_ELEC_PRICES,
@@ -178,6 +179,7 @@ def _safe_price_coverage(data: object) -> dict[str, object]:
         return {}
     coverage: dict[str, object] = {}
     local_timezone = ZoneInfo("Europe/Brussels")
+    today = datetime.now(local_timezone).date()
     for segment in ("electricity", "gas"):
         source = data.get(segment)
         if source is None:
@@ -214,6 +216,16 @@ def _safe_price_coverage(data: object) -> dict[str, object]:
                 len(raw_prices) if isinstance(raw_prices, (list, tuple)) else None
             ),
             "resolution_minutes": getattr(source, "resolution_minutes", None),
+            "today_covered_minutes": (
+                round(covered_seconds_in_local_day(source, today) / 60, 2)
+                if isinstance(effective_prices, (list, tuple))
+                else None
+            ),
+            "today_gap_free": (
+                covers_local_day(source, today)
+                if isinstance(effective_prices, (list, tuple))
+                else None
+            ),
         }
     return coverage
 
@@ -783,6 +795,9 @@ async def async_get_config_entry_diagnostics(
             site_selected=bool(entry.data.get("site_reference")),
             monthly_finance_enabled=bool(
                 entry.options.get("monthly_finance_enabled", False)
+            ),
+            price_cache_present=(
+                getattr(coordinator, "_static_prices_today", None) is not None
             ),
             local_today=datetime.now(ZoneInfo("Europe/Brussels")).date(),
         ),

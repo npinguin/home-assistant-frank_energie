@@ -191,3 +191,52 @@ def test_evidence_is_bounded_and_does_not_contain_raw_responses() -> None:
     assert evidence["retained_events"] == 96
     assert evidence["checks"]["month_summary"]["state"] == "source_present"
     assert "TOP_SECRET" not in str(evidence)
+
+
+def test_cached_startup_is_explicitly_not_a_live_source_check() -> None:
+    trace = DiagnosticTrace()
+    result = source_check_evidence(
+        trace,
+        authenticated=True,
+        site_selected=True,
+        monthly_finance_enabled=True,
+        local_today=TODAY,
+        price_cache_present=True,
+    )["checks"]
+
+    assert result["public_market_prices"]["state"] == "cached_price_state_without_source_check"
+    assert result["customer_prices"]["state"] == "cached_price_state_without_source_check"
+    assert result["public_market_prices"]["complete_data_verified"] is False
+    assert result["delivery_sites"]["state"] == "not_observed_in_retained_trace"
+
+
+def test_smart_services_are_optional_but_their_actual_calls_are_visible() -> None:
+    trace = DiagnosticTrace()
+    trace.record(
+        "graphql_account",
+        "ok",
+        operation="EnodeChargers",
+        response={"data": {"enodeChargers": []}},
+    )
+    trace.record(
+        "graphql_account",
+        "ok",
+        operation="SmartPvSystems",
+        response={"data": {"smartPvSystems": [{"id": "private-not-exported"}]}},
+    )
+    trace.record("graphql_account", "exception", operation="SmartHvacStatus")
+
+    result = _checks(trace)
+    assert result["enode_chargers"]["state"] == "source_empty"
+    assert result["smart_pv_systems"]["state"] == "source_present"
+    assert result["smart_hvac"]["state"] == "request_failed"
+    assert result["smart_batteries"]["state"] == "optional_not_observed"
+    assert not result["enode_chargers"]["expected"]
+    assert "private-not-exported" not in str(result)
+
+
+def test_anonymous_account_does_not_require_smart_service_checks() -> None:
+    trace = DiagnosticTrace()
+    result = _checks(trace, authenticated=False)
+    assert result["enode_chargers"]["state"] == "not_applicable_anonymous"
+    assert result["smart_pv_systems"]["expected"] is False

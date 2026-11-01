@@ -33,6 +33,11 @@ _RESPONSE_ROOTS: Final[frozenset[str]] = frozenset(
         "userSites",
         "deliverySites",
         "contractPriceResolutionState",
+        "smartBatteries",
+        "enodeChargers",
+        "enodeVehicles",
+        "smartPvSystems",
+        "userSmartFeedIn",
     }
 )
 _SOURCES: Final[frozenset[str]] = frozenset(

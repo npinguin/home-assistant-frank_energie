@@ -890,3 +890,32 @@ def test_provider_period_freshness_uses_local_day_for_utc_meter_timestamp() -> N
         local_today=date(2026, 11, 1),
     )
     assert result["month_summary"]["last_meter_reading_in_current_local_month"] is True
+
+
+def test_price_coverage_reports_real_minutes_and_missing_intervals() -> None:
+    """24 quarter-hour slots do not prove 24 hours of Belgian price coverage."""
+    from datetime import UTC, timedelta
+    from python_frank_energie.models import PriceData
+
+    today = datetime.now(ZoneInfo("Europe/Brussels")).date()
+    start = datetime.combine(
+        today, time.min, tzinfo=ZoneInfo("Europe/Brussels")
+    ).astimezone(UTC)
+    quarter_hours = [
+        {
+            "from": (start + timedelta(minutes=index * 15)).isoformat(),
+            "till": (start + timedelta(minutes=(index + 1) * 15)).isoformat(),
+            "marketPrice": 0.10,
+            "marketPriceTax": 0.02,
+            "sourcingMarkupPrice": 0.01,
+            "energyTaxPrice": 0.10,
+        }
+        for index in range(24)
+    ]
+    result = _safe_price_coverage(
+        {"electricity": PriceData(quarter_hours, energy_type="electricity")}
+    )["electricity"]
+
+    assert result["price_points"] == 24
+    assert result["today_covered_minutes"] == 360
+    assert result["today_gap_free"] is False

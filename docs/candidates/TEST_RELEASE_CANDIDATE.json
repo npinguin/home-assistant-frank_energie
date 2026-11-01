@@ -3,5 +3,5 @@
   "channel": "hacs-test",
   "acceptance": "pre-release-only",
   "source_branch": "fix/be-price-provenance-truth",
-  "validation_attempt": 1
+  "validation_attempt": 2
 }

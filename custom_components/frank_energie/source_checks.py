@@ -40,6 +40,19 @@ _SOURCES: dict[str, tuple[str, str, str]] = {
 }
 
 
+# Optional provider services are reported when queried, but their absence is
+# not a failed check: a Belgian tariff customer need not have Frank-controlled
+# batteries, chargers, vehicles, PV, smart feed-in or HVAC.
+_OPTIONAL_SOURCES: dict[str, tuple[str, str, str]] = {
+    "smart_batteries": ("graphql_account", "SmartBatteries", "smartBatteries"),
+    "enode_chargers": ("graphql_account", "EnodeChargers", "enodeChargers"),
+    "enode_vehicles": ("graphql_account", "EnodeVehicles", "enodeVehicles"),
+    "smart_pv_systems": ("graphql_account", "SmartPvSystems", "smartPvSystems"),
+    "smart_feed_in": ("graphql_account", "UserSmartFeedIn", "userSmartFeedIn"),
+    "smart_hvac": ("graphql_account", "SmartHvacStatus", "me"),
+}
+
+
 def _source_check(
     events: list[dict[str, Any]],
     source: str,
@@ -91,6 +104,7 @@ def source_check_evidence(
     site_selected: bool,
     monthly_finance_enabled: bool,
     local_today: date,
+    price_cache_present: bool = False,
 ) -> dict[str, object]:
     """Provide a fixed supplier-source checklist from bounded request evidence."""
     snapshot = (
@@ -131,10 +145,35 @@ def source_check_evidence(
             }
         else:
             check = _source_check(events, source, operation, root, period)
+            if (
+                price_cache_present
+                and key in ("public_market_prices", "customer_prices")
+                and check["state"] == "not_observed_in_retained_trace"
+            ):
+                check["state"] = "cached_price_state_without_source_check"
         result[key] = {
             **check,
             "expected": skip_reason is None,
             "requested_period": period,
+        }
+
+    for key, (source, operation, root) in _OPTIONAL_SOURCES.items():
+        if not authenticated:
+            check = {
+                "state": "not_applicable_anonymous",
+                "last_request_utc": None,
+                "last_request_outcome": None,
+                "complete_data_verified": False,
+            }
+        else:
+            check = _source_check(events, source, operation, root)
+            if check["state"] == "not_observed_in_retained_trace":
+                check["state"] = "optional_not_observed"
+        result[key] = {
+            **check,
+            "expected": False,
+            "optional_provider_service": True,
+            "requested_period": None,
         }
 
     return {

@@ -228,3 +228,14 @@ def test_month_source_states_are_not_confused_by_parallel_periods_or_failures():
     assert trace.source_states_for_month("2026-10") is None
     assert trace.source_states_for_month("2026-11") is not None
     assert "PRIVATE-ACCOUNT" not in str(trace.snapshot())
+
+
+def test_optional_smart_service_roots_keep_only_presence_metadata() -> None:
+    from custom_components.frank_energie.diagnostic_trace import _response_metadata
+
+    metadata = _response_metadata(
+        {"data": {"enodeChargers": [], "smartPvSystems": [{"id": "SECRET"}]}}
+    )
+    assert metadata["response_roots"]["enodeChargers"] == "empty"
+    assert metadata["response_roots"]["smartPvSystems"] == "present"
+    assert "SECRET" not in str(metadata)

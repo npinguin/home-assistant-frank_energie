@@ -581,3 +581,14 @@ refresh. Compare `source_check_evidence.checks` with
 Recorder. Real Belgian account checks for gas and invoice-line reconciliation
 are not implied by this diagnostic change. PR #18 stays Draft and stable
 promotion is not authorized.
+
+## 2026-11-01 — candidate v2026.11.1.5 second exact-source attempt
+
+The first attempt was blocked by a transient GitHub Actions Ruff-runner
+checkout network error (`github.com:443` before lint); no source lint failure
+was recorded. Rather than weakening Ruff/Harden Runner or moving an
+immutable tag, validation attempt 2 adds concrete provider-observability
+coverage and requalifies the entire code on a new exact source SHA.
+A public HACS TEST release remains gated on Python 3.14/3.14.2 tests,
+Ruff, Quality Scale, Link Check, HACS, Hassfest and immutable checksum.
+`main` and prior releases remain unchanged.
