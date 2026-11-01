@@ -25,6 +25,7 @@ from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
 
 from . import FrankEnergieEntryData
+from .finance import finance_evidence
 from .const import (
     SERVICE_NAME_COSTS,
     SERVICE_NAME_ELEC_PRICES,
@@ -514,9 +515,7 @@ def _safe_gas_entity_pipeline(
 
             entity = matches[0]
             device = devices.devices.get(entity.device_id)
-            matching_device = (
-                getattr(device, "model", None) == expected_model
-            )
+            matching_device = getattr(device, "model", None) == expected_model
             if entity.disabled_by is not None:
                 state = "disabled"
             else:
@@ -592,9 +591,7 @@ def _safe_gas_delivery_pipeline(
 
     next_day_complete: bool | None = None
     if gas is not None and hasattr(price_coordinator, "_covers_local_day"):
-        next_day_complete = bool(
-            price_coordinator._covers_local_day(gas, tomorrow)
-        )
+        next_day_complete = bool(price_coordinator._covers_local_day(gas, tomorrow))
 
     stats = getattr(statistics_coordinator, "data", None)
     usage = stats.get("usage") if isinstance(stats, dict) else None
@@ -619,9 +616,9 @@ def _safe_gas_delivery_pipeline(
                     datetime.combine(
                         tomorrow + timedelta(days=1), time.min, local_tz
                     ).astimezone(ZoneInfo("UTC"))
-                    - datetime.combine(
-                        tomorrow, time.min, local_tz
-                    ).astimezone(ZoneInfo("UTC"))
+                    - datetime.combine(tomorrow, time.min, local_tz).astimezone(
+                        ZoneInfo("UTC")
+                    )
                 ).total_seconds()
                 // 3600
             ),
@@ -632,7 +629,9 @@ def _safe_gas_delivery_pipeline(
             "unit": (
                 normalized_unit
                 if normalized_unit in ("KWH", "M3", "M³", "CUBIC_METERS")
-                else "unreported" if normalized_unit is None else "other"
+                else "unreported"
+                if normalized_unit is None
+                else "other"
             ),
             "usage_total_reported": (
                 getattr(gas_usage, "usage_total", None) is not None
@@ -737,6 +736,17 @@ async def async_get_config_entry_diagnostics(
                 getattr(
                     getattr(runtime_data, "statistics_coordinator", None), "data", None
                 )
+            ),
+            "finance_audit": finance_evidence(
+                (
+                    getattr(runtime_data.statistics_coordinator, "data", {}) or {}
+                ).get("month_insights_current"),
+                (
+                    getattr(runtime_data.statistics_coordinator, "data", {}) or {}
+                ).get("month_insights_previous"),
+                (
+                    getattr(runtime_data.statistics_coordinator, "data", {}) or {}
+                ).get("month_summary"),
             ),
             "provider_data_freshness": _safe_provider_data_freshness(
                 getattr(
