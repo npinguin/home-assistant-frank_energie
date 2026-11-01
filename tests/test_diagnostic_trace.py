@@ -179,3 +179,48 @@ def test_graphql_trace_stays_bounded_and_rejects_untrusted_operation_names() -> 
     assert event["operation"] == "unknown"
     assert "period" not in event
     assert "private-id/secret:123" not in str(trace.snapshot())
+
+
+def test_month_source_states_are_not_confused_by_parallel_periods_or_failures():
+    trace = DiagnosticTrace()
+    response = lambda gas: {
+        "data": {
+            "monthInsights": {
+                "lastMeterReadingDate": "2026-10-30T00:00:00Z",
+                "gasDifference": {"actualCosts": gas},
+            }
+        }
+    }
+    trace.record(
+        "graphql_account",
+        "ok",
+        operation="MonthInsights",
+        period="2026-10",
+        response=response(0.0),
+    )
+    trace.record(
+        "graphql_account",
+        "ok",
+        operation="MonthInsights",
+        period="2026-11",
+        response=response(99.0),
+    )
+    assert trace.source_states_for_month("2026-10")[
+        "gasDifference.actualCosts"
+    ] == "zero"
+    assert trace.source_states_for_month("2026-11")[
+        "gasDifference.actualCosts"
+    ] == "positive"
+    assert trace.source_states_for_month("2026-09") is None
+    assert trace.source_states_for_month("secret-customer") is None
+
+    trace.record(
+        "graphql_account",
+        "exception",
+        operation="MonthInsights",
+        period="2026-10",
+        error=RuntimeError("PRIVATE-ACCOUNT"),
+    )
+    assert trace.source_states_for_month("2026-10") is None
+    assert trace.source_states_for_month("2026-11") is not None
+    assert "PRIVATE-ACCOUNT" not in str(trace.snapshot())
