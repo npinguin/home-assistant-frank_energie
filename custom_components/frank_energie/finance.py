@@ -107,10 +107,15 @@ def finance_reading(
 
     difference_name, field_name, required_unit = _FIELDS[metric]
     gas_excluded = bool(getattr(insights, "gasExcluded", False))
-    if gas_excluded and snapshot.gas_expected is True and metric in (
-        "actual_total",
-        "expected_to_reading",
-        "expected_total",
+    if (
+        gas_excluded
+        and snapshot.gas_expected is True
+        and metric
+        in (
+            "actual_total",
+            "expected_to_reading",
+            "expected_total",
+        )
     ):
         return None, "gas_excluded_from_total"
     if (metric.startswith("gas_") or metric == "expected_gas") and gas_excluded:
