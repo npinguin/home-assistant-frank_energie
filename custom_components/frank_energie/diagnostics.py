@@ -712,9 +712,18 @@ async def async_get_config_entry_diagnostics(
         "runtime_health": {
             # No private fields; a green coordinator transport is not proof
             # that the provider returned usable account or tariff data.
-            "authenticated": bool(coordinator.api.is_authenticated),
+            "authenticated": bool(
+                getattr(getattr(coordinator, "api", None), "is_authenticated", False)
+            ),
             "site_metadata_present": bool(
-                (runtime_data.settings_coordinator.data or {}).get("user_sites")
+                (
+                    getattr(
+                        getattr(runtime_data, "settings_coordinator", None),
+                        "data",
+                        None,
+                    )
+                    or {}
+                ).get("user_sites")
             ),
             "current_electricity_price_present": (
                 getattr((coordinator.data or {}).get("electricity"), "current", None)
