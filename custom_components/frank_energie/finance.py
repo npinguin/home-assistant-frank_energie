@@ -93,11 +93,18 @@ def finance_reading(
     # A value read earlier than the requested period is never relabelled.
     start, end = bounds
     local_date = meter_date.astimezone(_AMSTERDAM).date()
-    if not start <= local_date <= end:
+    # A forecast is tied to the period requested from the provider and can
+    # precede its first meter reading. Actual and cutoff-based values cannot.
+    forecast_metric = metric.startswith("expected_") and (
+        metric != "expected_to_reading"
+    )
+    if not forecast_metric and not start <= local_date <= end:
         return None, "reading_outside_period"
 
     difference_name, field_name, required_unit = _FIELDS[metric]
-    if metric.startswith("gas_") and bool(getattr(insights, "gasExcluded", False)):
+    if (
+        metric.startswith("gas_") or metric == "expected_gas"
+    ) and bool(getattr(insights, "gasExcluded", False)):
         return None, "gas_excluded"
 
     block = (
