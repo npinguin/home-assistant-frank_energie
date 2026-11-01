@@ -1149,6 +1149,28 @@
       },
       "finance_previous_feed_in_kwh": {
         "name": "Énergie injectée — mois précédent"
+      },
+      "finance_current_readiness": {
+        "name": "Couverture financière — mois en cours",
+        "state": {
+          "not_published": "Aucune donnée mensuelle",
+          "contract_unverified": "Contrat non vérifié",
+          "electricity_missing": "Coûts électricité manquants",
+          "gas_missing": "Coûts gaz manquants",
+          "provider_total_missing": "Total fournisseur manquant",
+          "provider_components_present": "Composantes fournisseur disponibles"
+        }
+      },
+      "finance_previous_readiness": {
+        "name": "Couverture financière — mois précédent",
+        "state": {
+          "not_published": "Aucune donnée mensuelle",
+          "contract_unverified": "Contrat non vérifié",
+          "electricity_missing": "Coûts électricité manquants",
+          "gas_missing": "Coûts gaz manquants",
+          "provider_total_missing": "Total fournisseur manquant",
+          "provider_components_present": "Composantes fournisseur disponibles"
+        }
       }
     }
   },
