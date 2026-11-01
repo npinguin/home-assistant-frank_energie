@@ -83,6 +83,12 @@ jobs:
           '; then
               echo "PASS all central checks on ${GITHUB_SHA}"
               break
+            else
+              status=$?
+              if [ "$status" = "1" ]; then
+                echo "BLOCK central CI failed on exact source; no test release"
+                exit 1
+              fi
             fi
             if [ "$attempt" = "75" ]; then
               echo "BLOCK central CI not green on exact source"
