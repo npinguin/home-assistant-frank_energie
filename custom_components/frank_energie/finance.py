@@ -233,8 +233,8 @@ def finance_attributes(
     return attrs
 
 
-# Invoice amounts are deliberately excluded: Belgium bills consumption
-# adjustments later (often M+2), and invoice periods need not be usage months.
+# Invoice amounts are deliberately excluded: payment and settlement periods
+# need not match their underlying consumption calendar month.
 _AUDIT_METRICS = tuple(_FIELDS)
 
 
