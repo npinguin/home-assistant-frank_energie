@@ -138,6 +138,12 @@ def service_refresh_attributes(
         result["price_slot_updates"] = (
             "local 15/60-minute source slot boundaries; no API request required"
         )
+        fetched = getattr(service.coordinator, "last_fetch_today", None)
+        result["last_today_price_fetch_utc"] = (
+            fetched.astimezone(UTC).isoformat()
+            if isinstance(fetched, datetime) and fetched.tzinfo is not None
+            else None
+        )
 
     if trace is None or not callable(getattr(trace, "snapshot", None)):
         return result
@@ -145,11 +151,16 @@ def service_refresh_attributes(
     if not isinstance(events, list):
         return result
 
+    sources = (
+        ("graphql_account", "graphql_public")
+        if service.key in ("prices", "gas_prices")
+        else ("graphql_account",)
+    )
     latest: datetime | None = None
     for event in reversed(events):
         if (
             not isinstance(event, dict)
-            or event.get("source") != "graphql_account"
+            or event.get("source") not in sources
             or event.get("operation") not in service.operations
         ):
             continue
