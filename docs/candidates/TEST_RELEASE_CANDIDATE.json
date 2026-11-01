@@ -1,0 +1,8 @@
+{
+  "version": "2026.11.1.10",
+  "channel": "hacs-test",
+  "acceptance": "upstream-source-runtime-validation",
+  "source_branch": "test/upstream-source-integrity-2026.11.1.10",
+  "upstream_source_sha": "5f29c7cb5552e57f0ad21b771e1794ea9c753b13",
+  "validation_attempt": 1
+}
