@@ -54,9 +54,9 @@ jobs:
 
       - name: Install Poetry
         run: |
-          set -o pipefail
-          curl -sSL https://install.python-poetry.org | python3 -
-          echo "PATH=$HOME/.local/bin:$PATH" >> $GITHUB_ENV
+          # Test-branch-only CI reliability: the external bootstrap endpoint can
+          # fail before the product tests start. Pin Poetry via PyPI instead.
+          python -m pip install --disable-pip-version-check "poetry==2.2.1"
 
       - name: Install dependencies with Poetry
         run: |
