@@ -1752,6 +1752,13 @@ async def test_async_update_data_falls_back_to_cached_today_on_fetch_failure(
     assert result[DATA_ELECTRICITY] is cached_today.electricity
     assert coordinator.last_fetch_today is None  # fallback path never updates it
 
+    # A successful request that returns no usable prices is still not a
+    # successful *source* refresh. It must not suppress the next API retry.
+    coordinator._fetch_prices_with_fallback = AsyncMock(return_value=None)
+    result_with_empty_source = await coordinator._async_update_data()
+    assert result_with_empty_source[DATA_ELECTRICITY] is cached_today.electricity
+    assert coordinator.last_fetch_today is None
+
 
 @pytest.mark.asyncio
 async def test_async_update_data_raises_when_fetch_fails_and_no_valid_cache(
