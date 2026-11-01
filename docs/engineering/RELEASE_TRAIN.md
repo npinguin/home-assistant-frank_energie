@@ -502,3 +502,36 @@ live polling intervals and real observed last API checks.
 - The TEST release is not evidence of invoice reconciliation or stable
   Belgian gas billing. Do not close the existing financial blockers merely
   because a new candidate is installable.
+
+## 2026-11-01 — timestamp-accurate price coverage and Belgian source contract
+
+A focused maintenance and correctness change was made **on existing PR #18**
+after immutable HACS TEST `v2026.11.1.4`. It is not included in that ZIP.
+
+- Root cause: `_preserve_today_source_coverage` previously compared the number
+  of price records. For example, 24 quarter-hour records cover only six hours,
+  while 12 hourly records cover twelve hours. The older implementation could
+  keep the shorter source, suppressing better BE electricity/gas coverage.
+- `price_coverage.py` now owns the pure, single local-day interval calculation.
+  Both full-day acceptance and the better-source cache comparison use
+  overlapping/duplicate-safe UTC interval coverage, clipped to the local
+  date including the 23/25-hour DST transition. Equal coverage still accepts
+  a new provider response so legitimate tariff revisions are not frozen.
+- `tests/test_price_coverage.py` adds synthetic source interval regressions
+  for mixed quarter-hour/hour data, partial source updates, duplicated
+  intervals, day clipping and DST. No account data or API calls are used.
+- `docs/engineering/BE_SOURCE_CONTRACTS.md` defines source ownership,
+  privacy, financial truth, time coverage, tests and acceptance gates without
+  coupling the integration to a particular energy-control consumer.
+
+**Validation status:** require exact-head central Python 3.14/3.14.2
+Flake8/pytest, Ruff, Quality Scale and Link Check. Then a **new** immutable
+HACS TEST version must be qualified through the existing publisher and
+installed on the real BE HA instance. Do not alter any existing tag or
+download asset; PR #18 stays Draft, `main` remains unchanged.
+
+**Still open before stable:** public-market fallback remains visible through
+generic price sensors and must not be represented as a `MODEL` invoice
+rate; provider-metered gas and customer tariff coverage, monthly
+source zero/null and invoice-line reconciliation, HA entity/Recorder
+state, refresh truth, HACS migration and rollback require real acceptance.
