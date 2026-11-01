@@ -739,6 +739,7 @@ def test_ha_entity_summary_limits_device_group_names_to_known_services(
     assert "private-meter-model" not in str(output)
     assert "example_private" not in str(output)
 
+
 def _synthetic_gas_price_data(day: date, slots: int):
     """Create typed, privacy-safe gas records for a future local day."""
     from datetime import UTC, timedelta
@@ -867,14 +868,14 @@ def test_gas_entity_pipeline_checks_real_states_and_correct_service_devices(
         ),
     )
 
-    result = _safe_gas_entity_pipeline(
-        hass, SimpleNamespace(entry_id="target")
-    )
+    result = _safe_gas_entity_pipeline(hass, SimpleNamespace(entry_id="target"))
     assert result["current_prices"]["gas_markup"]["state"] == "available"
     assert result["current_prices"]["gas_markup"]["correct_device_group"] is True
     assert result["forecast"]["gas_tomorrow_avg"]["state"] == "unavailable"
     assert result["forecast"]["gas_tomorrow_avg"]["correct_device_group"] is False
     assert result["historical_usage"]["usage_gas_yesterday"]["state"] == "not_loaded"
-    assert result["historical_usage"]["costs_gas_yesterday"]["state"] == "not_registered"
+    assert (
+        result["historical_usage"]["costs_gas_yesterday"]["state"] == "not_registered"
+    )
     assert "gas_price_private" not in str(result)
     assert "some-key" not in str(result)
