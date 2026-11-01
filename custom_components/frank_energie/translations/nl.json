@@ -911,6 +911,12 @@
       "finance_current_feed_in_kwh": {
         "name": "Teruggeleverde energie — deze maand"
       },
+      "finance_current_actual_total": {
+        "name": "Werkelijke totale kosten tot laatste meterstand — deze maand"
+      },
+      "finance_current_expected_to_reading": {
+        "name": "Verwachte kosten tot laatste meterstand — deze maand"
+      },
       "finance_current_expected_total": {
         "name": "Verwachte totale kosten — deze maand"
       },
@@ -925,6 +931,12 @@
       },
       "finance_current_expected_feed_in": {
         "name": "Verwacht resultaat teruglevering — deze maand"
+      },
+      "finance_previous_actual_total": {
+        "name": "Werkelijke totale kosten tot laatste meterstand — vorige maand"
+      },
+      "finance_previous_expected_to_reading": {
+        "name": "Verwachte kosten tot laatste meterstand — vorige maand"
       },
       "finance_previous_electricity_costs": {
         "name": "Elektriciteitskosten — vorige maand"
