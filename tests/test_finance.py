@@ -438,9 +438,10 @@ def test_provider_readiness_never_claims_a_complete_household_bill():
     assert attrs["gas_cost_quality"] == "available"
     assert "61.2" not in str(attrs)
 
-    assert finance_period_readiness(
-        scoped(source_states, gas_excluded=True)
-    ) == "gas_missing"
+    assert (
+        finance_period_readiness(scoped(source_states, gas_excluded=True))
+        == "gas_missing"
+    )
     no_gas = {k: v for k, v in source_states.items() if not k.startswith("gas")}
     assert finance_period_readiness(scoped(no_gas)) == "gas_missing"
     no_total = {
