@@ -185,7 +185,9 @@ async def test_hourly_recovery_does_not_call_api_during_maintenance() -> None:
 
 
 @pytest.mark.asyncio
-async def test_recovery_does_not_report_false_success_when_data_is_still_missing() -> None:
+async def test_recovery_does_not_report_false_success_when_data_is_still_missing() -> (
+    None
+):
     """A successful request call is not necessarily successful source recovery."""
     hass = MagicMock()
     entry = MagicMock()
