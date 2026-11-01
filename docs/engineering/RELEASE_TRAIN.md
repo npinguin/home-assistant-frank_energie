@@ -535,3 +535,49 @@ generic price sensors and must not be represented as a `MODEL` invoice
 rate; provider-metered gas and customer tariff coverage, monthly
 source zero/null and invoice-line reconciliation, HA entity/Recorder
 state, refresh truth, HACS migration and rollback require real acceptance.
+
+## 2026-11-01 — restart source-check visibility audit (post-v2026.11.1.4)
+
+The HACS TEST v2026.11.1.4 build predates this diagnostics extension.
+A restart can legitimately show service-level "Last API check" as empty or
+incomplete without establishing a provider failure:
+
+- Price initialization uses a valid on-disk day cache and may skip an
+  initial network request. Cached HA states are allowed while the provider
+  request observer, which starts empty on every HA start, has no new event.
+- Settings is initialized first, then prices, statistics and optional smart
+  coordinators concurrently. A successful coordinator update is **not** a
+  per-GraphQL-operation verification or proof of complete data.
+- Statistics calls MonthSummary, Invoices and daily PeriodUsageAndCosts.
+  Opt-in MonthInsights (current/previous period) is skipped when disabled;
+  it is never an implicit startup mandatory request.
+- Optional smart entities are not evidence of a contractual smart service.
+  Never make presence of arbitrary HA hardware count as a Frank supplier API.
+- The observer retains the most recent 96 sanitized requests since restart,
+  so absent records may be "not observed in retained trace", not proof that
+  an earlier request never happened.
+
+PR #18 now includes a **read-only fixed source-check matrix** at
+`source_check_evidence` in the config entry diagnostics, backed by
+`source_checks.py`. Each field distinguishes public market from customer
+prices even though the pinned API client calls both operations `MarketPrices`.
+Other checks are UserSites, Me, MonthSummary, Invoices,
+PeriodUsageAndCosts, and both period-matched MonthInsights requests.
+Possible states include: `source_present`, `source_null`,
+`source_empty`, `source_not_in_response`, `request_failed`,
+`disabled_by_option`, `not_applicable_*`, and
+`not_observed_in_retained_trace`. This requires **no extra API
+requests**; `complete_data_verified` stays false to prevent treating JSON
+root presence as meter/invoice completeness. No money or account identifiers
+are logged. Tests cover both prices under the same operation name, each
+required financial operation, period isolation, error overrides, disabled
+finance, selected-site isolation and retention/privacy.
+
+**Acceptance remains pending:** exact-head CI and a NEW immutable TEST
+candidate, then installed HA 2026.10.x diagnostics after restart and manual
+refresh. Compare `source_check_evidence.checks` with
+`graphql_request_evidence.latest_by_source_operation`,
+`coordinator_evidence.provider_data_freshness`, device availability and
+Recorder. Real Belgian account checks for gas and invoice-line reconciliation
+are not implied by this diagnostic change. PR #18 stays Draft and stable
+promotion is not authorized.
