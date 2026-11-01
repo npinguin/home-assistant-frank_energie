@@ -165,7 +165,7 @@ def test_monthly_description_is_opt_in_and_legacy_daily_alias_never_reused():
     assert "finance_current_electricity_costs" in keys
     assert "finance_previous_gas_costs" in keys
     assert "finance_current_expected_fixed" in keys
-    assert len(keys) == 19
+    assert len(keys) == 23
     assert all(d.state_class is None for d in _monthly_finance_descriptions())
     assert all(d.authenticated for d in _monthly_finance_descriptions())
     assert const.CONF_MONTHLY_FINANCE_ENABLED == "monthly_finance_enabled"
