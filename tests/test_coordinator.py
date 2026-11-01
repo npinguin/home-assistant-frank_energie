@@ -2690,7 +2690,8 @@ def test_partial_current_gas_day_is_not_considered_a_fresh_cache(
         mock_frank_energie, mock_config_entry
     )
     today = date(2026, 11, 1)
-    now_utc = datetime(2026, 11, 1, 12, 0, tzinfo=UTC)
+    # Before the next-day publication window, a fully covered today is cacheable.
+    now_utc = datetime(2026, 11, 1, 10, 0, tzinfo=UTC)
     partial = MarketPrices(
         electricity=_day_prices(today, segment="electricity"),
         gas=_day_prices(today, segment="gas", hours=6),
