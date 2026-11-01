@@ -5092,6 +5092,8 @@ _MONTHLY_FINANCE_METRICS: Final[dict[str, tuple[SensorDeviceClass, str]]] = {
     "gas_m3": (SensorDeviceClass.GAS, UnitOfVolume.CUBIC_METERS),
     "feed_in_costs": (SensorDeviceClass.MONETARY, CURRENCY_EURO),
     "feed_in_kwh": (SensorDeviceClass.ENERGY, UnitOfEnergy.KILO_WATT_HOUR),
+    "actual_total": (SensorDeviceClass.MONETARY, CURRENCY_EURO),
+    "expected_to_reading": (SensorDeviceClass.MONETARY, CURRENCY_EURO),
     "expected_total": (SensorDeviceClass.MONETARY, CURRENCY_EURO),
     "expected_electricity": (SensorDeviceClass.MONETARY, CURRENCY_EURO),
     "expected_gas": (SensorDeviceClass.MONETARY, CURRENCY_EURO),
@@ -5099,6 +5101,8 @@ _MONTHLY_FINANCE_METRICS: Final[dict[str, tuple[SensorDeviceClass, str]]] = {
     "expected_feed_in": (SensorDeviceClass.MONETARY, CURRENCY_EURO),
 }
 _MONTHLY_FINANCE_ACTUAL: Final[tuple[str, ...]] = (
+    "actual_total",
+    "expected_to_reading",
     "electricity_costs",
     "electricity_kwh",
     "gas_costs",
@@ -5250,9 +5254,9 @@ async def async_setup_entry(
         settings_coordinator.data.get(DATA_USER_SITES),
         price_coordinator.site_reference,
     )
-    user_segments = (
-        ["ELECTRICITY"] if selected_electricity else []
-    ) + (["GAS"] if selected_gas else [])
+    user_segments = (["ELECTRICITY"] if selected_electricity else []) + (
+        ["GAS"] if selected_gas else []
+    )
 
     user_data: object = None
     if settings_coordinator.api.is_authenticated:
