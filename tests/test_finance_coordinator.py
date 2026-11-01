@@ -1,6 +1,6 @@
 """Integration-facing monthly finance polling and entity lifecycle guards."""
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timedelta
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, call
 from zoneinfo import ZoneInfo
@@ -165,7 +165,9 @@ def test_monthly_description_is_opt_in_and_legacy_daily_alias_never_reused():
     assert "finance_current_electricity_costs" in keys
     assert "finance_previous_gas_costs" in keys
     assert "finance_current_expected_fixed" in keys
-    assert len(keys) == 23
+    assert len(keys) == 25
+    assert "finance_current_readiness" in keys
+    assert "finance_previous_readiness" in keys
     assert all(d.state_class is None for d in _monthly_finance_descriptions())
     assert all(d.authenticated for d in _monthly_finance_descriptions())
     assert const.CONF_MONTHLY_FINANCE_ENABLED == "monthly_finance_enabled"
@@ -225,6 +227,50 @@ async def test_previous_month_last_good_survives_provider_outage_next_day():
 
 @pytest.mark.asyncio
 async def test_previous_month_cached_evidence_never_crosses_sites():
+    coordinator, entry, api = _statistics_coordinator(enabled=True)
+    first = await coordinator._async_update_data()
+    assert first[DATA_MONTH_INSIGHTS_PREVIOUS] is not None
+    entry.data["site_reference"] = "SITE_B"
+    api.month_insights.side_effect = TimeoutError("other site unavailable")
+    second = await coordinator._async_update_data()
+    assert second[DATA_MONTH_INSIGHTS_PREVIOUS] is None
+
+
+@pytest.mark.asyncio
+async def test_last_good_previous_month_survives_transient_provider_outage():
+    coordinator, _, api = _statistics_coordinator(enabled=True)
+    first = await coordinator._async_update_data()
+    saved = first[DATA_MONTH_INSIGHTS_PREVIOUS]
+    assert saved is not None
+    old_key = coordinator._previous_finance_cache_key
+    assert old_key is not None
+
+    # A later calendar day makes the previous-month source due for refresh.
+    coordinator._previous_finance_cache_key = (
+        old_key[0],
+        old_key[1],
+        old_key[2] - timedelta(days=1),
+    )
+    _, previous = month_keys(datetime.now(ZoneInfo("Europe/Amsterdam")).date())
+
+    async def temporary_outage(_site, period):
+        if period == previous:
+            raise TimeoutError("provider unavailable")
+        return SimpleNamespace(lastMeterReadingDate=datetime.now().astimezone())
+
+    api.month_insights.side_effect = temporary_outage
+    second = await coordinator._async_update_data()
+    assert second[DATA_MONTH_INSIGHTS_PREVIOUS] is saved
+    await coordinator._async_update_data()
+    assert coordinator._previous_finance_snapshot is saved
+
+    api.month_insights.side_effect = None
+    third = await coordinator._async_update_data()
+    assert third[DATA_MONTH_INSIGHTS_PREVIOUS] is not saved
+
+
+@pytest.mark.asyncio
+async def test_previous_month_cache_is_never_used_for_another_site():
     coordinator, entry, api = _statistics_coordinator(enabled=True)
     first = await coordinator._async_update_data()
     assert first[DATA_MONTH_INSIGHTS_PREVIOUS] is not None
