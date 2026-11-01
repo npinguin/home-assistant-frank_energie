@@ -8,6 +8,8 @@ import pytest
 from custom_components.frank_energie.finance import (
     MonthlyFinanceSnapshot,
     finance_attributes,
+    finance_period_readiness,
+    finance_period_readiness_attributes,
     finance_reading,
     month_bounds,
     month_keys,
@@ -391,3 +393,59 @@ def test_electricity_only_site_does_not_require_uncontracted_gas_breakdown():
         gas_expected=False,
     )
     assert finance_reading(snapshot, "actual_total") == (61.2, "available")
+
+
+def test_full_month_forecast_can_precede_first_meter_reading():
+    """A named-month forecast is not a meter-cutoff actual amount."""
+    snapshot = _snapshot(month="2026-11")
+    snapshot.insights.lastMeterReadingDate = None
+    assert finance_reading(snapshot, "expected_fixed") == (9.0, "available")
+    assert finance_reading(snapshot, "expected_total") == (80.0, "available")
+    assert finance_reading(snapshot, "actual_total") == (None, "missing_meter_date")
+    assert finance_reading(snapshot, "electricity_costs") == (
+        None,
+        "missing_meter_date",
+    )
+
+
+def test_provider_readiness_never_claims_a_complete_household_bill():
+    original = _snapshot()
+    source_states = {
+        "actualCostsUntilLastMeterReading": "positive",
+        "electricityDifference.actualCosts": "positive",
+        "electricityDifference.actualUsage": "positive",
+        "gasDifference.actualCosts": "positive",
+        "gasDifference.actualUsage": "positive",
+    }
+
+    def scoped(source, *, gas_excluded=False):
+        original.insights.gasExcluded = gas_excluded
+        return MonthlyFinanceSnapshot(
+            month=original.month,
+            insights=original.insights,
+            retrieved_at=original.retrieved_at,
+            source_states=source,
+            electricity_expected=True,
+            gas_expected=True,
+        )
+
+    assert finance_period_readiness(None) == "not_published"
+    assert finance_period_readiness(_snapshot()) == "contract_unverified"
+    full = scoped(source_states)
+    assert finance_period_readiness(full) == "provider_components_present"
+    attrs = finance_period_readiness_attributes(full)
+    assert attrs["invoice_reconciled"] is False
+    assert attrs["gas_cost_quality"] == "available"
+    assert "61.2" not in str(attrs)
+
+    assert finance_period_readiness(
+        scoped(source_states, gas_excluded=True)
+    ) == "gas_missing"
+    no_gas = {k: v for k, v in source_states.items() if not k.startswith("gas")}
+    assert finance_period_readiness(scoped(no_gas)) == "gas_missing"
+    no_total = {
+        k: v
+        for k, v in source_states.items()
+        if k != "actualCostsUntilLastMeterReading"
+    }
+    assert finance_period_readiness(scoped(no_total)) == "provider_total_missing"
