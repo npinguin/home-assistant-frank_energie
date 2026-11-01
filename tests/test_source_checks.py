@@ -204,8 +204,13 @@ def test_cached_startup_is_explicitly_not_a_live_source_check() -> None:
         price_cache_present=True,
     )["checks"]
 
-    assert result["public_market_prices"]["state"] == "cached_price_state_without_source_check"
-    assert result["customer_prices"]["state"] == "cached_price_state_without_source_check"
+    assert (
+        result["public_market_prices"]["state"]
+        == "cached_price_state_without_source_check"
+    )
+    assert (
+        result["customer_prices"]["state"] == "cached_price_state_without_source_check"
+    )
     assert result["public_market_prices"]["complete_data_verified"] is False
     assert result["delivery_sites"]["state"] == "not_observed_in_retained_trace"
 
