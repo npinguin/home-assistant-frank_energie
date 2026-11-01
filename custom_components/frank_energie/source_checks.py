@@ -7,7 +7,7 @@ contains complete meter/contract/billing data.
 
 from __future__ import annotations
 
-from datetime import date, timedelta
+from datetime import date
 from typing import Any
 
 from .finance import month_keys
