@@ -78,3 +78,7 @@ Formal product ownership and scope exclusions are defined in
 
 Update the source contract and its tests together when changing semantics.
 Do not create a new framework or generic abstraction for a single supplier.
+
+## Financial completeness and engineer handover
+
+The opt-in `finance_current_readiness` and `finance_previous_readiness` statuses evaluate **provider actual component coverage**, not all-in household billing. Even `provider_components_present` does not prove grid, capacity, taxes, fixed charges or invoice reconciliation. Forecast values differ from meter-cutoff actuals. Investigate missing gas and GraphQL month errors using the evidence and gates in [FINANCIAL_VISIBILITY_RUNBOOK.md](FINANCIAL_VISIBILITY_RUNBOOK.md). Update that runbook and regression tests when changing financial semantics.
