@@ -89,9 +89,9 @@ class FrankEnergieLastApiCheckSensor(FrankEnergieRefreshIntervalSensor):
     @property
     def native_value(self) -> datetime | None:
         """A provider request observed since restart, never an HA UI update."""
-        observed = service_refresh_attributes(
-            self._service, self._trace
-        ).get("last_api_request_utc")
+        observed = service_refresh_attributes(self._service, self._trace).get(
+            "last_api_request_utc"
+        )
         return datetime.fromisoformat(observed) if isinstance(observed, str) else None
 
     @property
