@@ -646,3 +646,13 @@ versioned runtime code or republish any immutable release.
 - Handoff to HA Energy Basic is specified in `docs/engineering/HA_ENERGY_BASIC_SOURCE_CONTRACT.md`. **No Basic package was modified in this Frank repository** and no second GraphQL client was introduced.
 - Target BE HA v2026.11.1.6 diagnostics observed 24h electricity and gas price coverage but lacked a post-cache live customer-price request. November MonthInsights was a provider GraphQL error; October was explicitly gasExcluded; yesterday gas usage absent. **Do not claim these supplier facts fixed by the new entity attributes.**
 - Promotion path: qualified exact-head test candidate ZIP using the existing version-neutral publisher, then target-HA install, source refresh, entity/Recorder history, HACS rollback, account-source and period invoice checks. PR remains Draft; stable blocked by live evidence and upstream finance source issue #11.
+
+
+## 2026-11-01 — HACS TEST candidate 2026.11.1.8: Belgian GraphQL API discovery
+
+- Follows immutable HACS TEST v2026.11.1.7 on **single Draft PR #18**, preserving all prior release tags, stable main and HA unique IDs.
+- Adds privacy-safe allowlisted categories and known top-level GraphQL field paths to the bounded in-memory diagnostic trace; raw provider error message, user/site metadata and arbitrary extension values are excluded.
+- The capture is passive and does not issue any extra GraphQL requests. Synthetic tests enforce preservation of the client's response and scrubbing of sensitive errors.
+- Real v2026.11.1.7 target diagnostics established authenticated customer prices for today's gas/electricity, 24h tomorrow electricity and six gas hours, November MonthInsights GraphQL error, October gas exclusion, prior-day gas usage absent. The new classification can aid the **next** root-cause investigation, not alter provider source truth.
+- [Belgian API research matrix](BE_GRAPHQL_API_RESEARCH.md) and Basic source contract now distinguish variable MODEL monthly settlement, public spot signals, and independently payable smart-service bonuses. No dynamic arbitrage claim or fake monthly total.
+- Release only as qualified immutable HACS TEST with exact SHA checks; no stable merge, no provider API claim until user tests this release after normal hourly finance polling.
