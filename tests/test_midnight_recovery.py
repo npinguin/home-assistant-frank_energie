@@ -115,6 +115,24 @@ async def test_hourly_scheduler_recovers_missing_core_streams_after_maintenance(
 
     local = datetime(2026, 11, 1, 2, 0, tzinfo=ZoneInfo("Europe/Brussels"))
     utc = local.astimezone(UTC)
+
+    async def recover_settings() -> None:
+        settings.data = {"user_sites": object()}
+        settings.last_update_success = True
+
+    async def recover_statistics() -> None:
+        stats.data = {"month_summary": object()}
+        stats.last_update_success = True
+
+    async def recover_prices() -> None:
+        price.data = {"electricity": SimpleNamespace(current=0.2)}
+        price._today_cache_covers_selected_site.return_value = True
+        price.last_update_success = True
+
+    settings.async_request_refresh.side_effect = recover_settings
+    stats.async_request_refresh.side_effect = recover_statistics
+    price.async_request_refresh.side_effect = recover_prices
+
     with (
         patch(
             "custom_components.frank_energie.async_track_utc_time_change",
@@ -163,4 +181,54 @@ async def test_hourly_recovery_does_not_call_api_during_maintenance() -> None:
         await component._schedule_aligned_updates(price)
         await callback(utc)
     price.async_request_refresh.assert_not_awaited()
-    price.async_update_listeners.assert_called_once()
+    price.publish_price_slot.assert_called_once_with(utc)
+
+
+@pytest.mark.asyncio
+async def test_recovery_does_not_report_false_success_when_data_is_still_missing() -> None:
+    """A successful request call is not necessarily successful source recovery."""
+    hass = MagicMock()
+    entry = MagicMock()
+    component = FrankEnergieComponent(hass, entry)
+    trace = DiagnosticTrace()
+    price = MagicMock()
+    price._diagnostic_trace = trace
+    price._should_skip_api_calls.return_value = False
+    price.api.is_authenticated = True
+    price.last_update_success = False
+    price.data = {"electricity": None, "gas": None}
+    price.last_fetch_today = None
+    price._today_cache_covers_selected_site.return_value = False
+    price.async_request_refresh = AsyncMock()
+
+    settings = price.settings_coordinator
+    settings.api.is_authenticated = False
+    settings.data = {"user_sites": object()}
+    stats = MagicMock()
+    stats.api.is_authenticated = False
+    stats.data = {"month_summary": object()}
+    entry.runtime_data.statistics_coordinator = stats
+
+    callbacks: list = []
+
+    def record_callback(_hass, callback, **_kwargs) -> MagicMock:
+        callbacks.append(callback)
+        return MagicMock()
+
+    local = datetime(2026, 11, 1, 2, tzinfo=ZoneInfo("Europe/Brussels"))
+    utc = local.astimezone(UTC)
+    with (
+        patch(
+            "custom_components.frank_energie.async_track_utc_time_change",
+            record_callback,
+        ),
+        patch("custom_components.frank_energie.dt_util.now", return_value=local),
+        patch("custom_components.frank_energie.dt_util.utcnow", return_value=utc),
+    ):
+        await component._schedule_aligned_updates(price)
+        await callbacks[0](utc)
+
+    price.async_request_refresh.assert_awaited_once()
+    outcomes = [event["outcome"] for event in trace.snapshot()["events"]]
+    assert "refresh_incomplete" in outcomes
+    assert "refresh_ok" not in outcomes
