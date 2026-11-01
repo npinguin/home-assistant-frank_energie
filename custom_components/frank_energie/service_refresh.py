@@ -233,7 +233,6 @@ def service_refresh_attributes(
     return result
 
 
-
 def service_api_status(service: RefreshService, trace: object | None) -> str:
     """Report the latest GraphQL transport outcome for this service.
 

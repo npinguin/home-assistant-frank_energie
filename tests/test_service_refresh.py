@@ -189,7 +189,6 @@ def test_last_api_check_is_real_source_timestamp_and_missing_is_unavailable():
     coordinator.async_request_refresh.assert_not_called()
 
 
-
 def test_api_status_differentiates_provider_errors_from_no_request():
     trace = DiagnosticTrace()
     coordinator = MagicMock(update_interval=timedelta(hours=1))

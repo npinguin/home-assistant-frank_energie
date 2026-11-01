@@ -101,7 +101,6 @@ class FrankEnergieLastApiCheckSensor(FrankEnergieRefreshIntervalSensor):
         return self.native_value is not None
 
 
-
 class FrankEnergieServiceApiStatusSensor(FrankEnergieRefreshIntervalSensor):
     """Diagnostic status of the latest actual GraphQL request for a service."""
 

@@ -5525,9 +5525,7 @@ async def async_setup_entry(
                 (
                     FrankEnergieRefreshIntervalSensor(service, config_entry, trace),
                     FrankEnergieLastApiCheckSensor(service, config_entry, trace),
-                    FrankEnergieServiceApiStatusSensor(
-                        service, config_entry, trace
-                    ),
+                    FrankEnergieServiceApiStatusSensor(service, config_entry, trace),
                     FrankEnergieLastSuccessfulApiResponseSensor(
                         service, config_entry, trace
                     ),

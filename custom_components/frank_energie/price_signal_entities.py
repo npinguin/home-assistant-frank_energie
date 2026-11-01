@@ -32,7 +32,9 @@ class _MarketHourEntity(CoordinatorEntity):
     def __init__(self, coordinator, entry: ConfigEntry) -> None:
         super().__init__(coordinator)
         self._entry = entry
-        self._attr_device_info = service_device_info(entry.entry_id, SERVICE_NAME_PRICES)
+        self._attr_device_info = service_device_info(
+            entry.entry_id, SERVICE_NAME_PRICES
+        )
 
     def _current(self):
         data = self.coordinator.data
@@ -98,9 +100,7 @@ class FrankEnergieCheapestMarketHoursBinarySensor(
 
     def _limit(self) -> int:
         return cheap_hour_count(
-            self._entry.options.get(
-                CONF_MARKET_CHEAP_HOURS, DEFAULT_MARKET_CHEAP_HOURS
-            )
+            self._entry.options.get(CONF_MARKET_CHEAP_HOURS, DEFAULT_MARKET_CHEAP_HOURS)
         )
 
     @property

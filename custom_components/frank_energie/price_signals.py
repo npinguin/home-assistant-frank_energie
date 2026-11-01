@@ -42,9 +42,7 @@ def market_hour_ranking(prices: object, day: date) -> tuple[MarketHour, ...] | N
 
     intervals: list[tuple[datetime, datetime, float]] = []
     for item in raw:
-        first, last = getattr(item, "date_from", None), getattr(
-            item, "date_till", None
-        )
+        first, last = getattr(item, "date_from", None), getattr(item, "date_till", None)
         if (
             not isinstance(first, datetime)
             or not isinstance(last, datetime)
