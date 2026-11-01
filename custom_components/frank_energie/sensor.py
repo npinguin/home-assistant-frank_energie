@@ -9,7 +9,7 @@ from __future__ import annotations
 import inspect
 import logging
 from dataclasses import asdict, dataclass, field
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from typing import Any, Callable, ClassVar, Final, Generic, Optional, TypeVar, Union
 from zoneinfo import ZoneInfo
 
@@ -175,6 +175,45 @@ def _parse_contract_date(date_val: datetime | str | None) -> str | None:
         return dt_util.as_local(parsed).strftime(FORMAT_DATE)
     except (ValueError, TypeError):
         return None
+
+
+def _current_month_summary(data: FrankEnergieData) -> object | None:
+    """Accept a 'this month' cost only for the current local calendar month.
+
+    Frank's MonthSummary is anchored to the last meter-reading date, which can
+    still belong to the previous month after midnight on the first. An
+    unverified month must be unavailable rather than shown under a new label.
+    """
+    summary = data.get(DATA_MONTH_SUMMARY)
+    last_reading = getattr(summary, "lastMeterReadingDate", None)
+    if isinstance(last_reading, datetime):
+        reading_day = (
+            last_reading.astimezone(ZoneInfo(TIMEZONE_AMSTERDAM)).date()
+            if last_reading.tzinfo is not None
+            else last_reading.date()
+        )
+    elif isinstance(last_reading, date):
+        reading_day = last_reading
+    elif isinstance(last_reading, str):
+        try:
+            parsed = datetime.fromisoformat(last_reading.replace("Z", "+00:00"))
+        except ValueError:
+            return None
+        reading_day = (
+            parsed.astimezone(ZoneInfo(TIMEZONE_AMSTERDAM)).date()
+            if parsed.tzinfo is not None
+            else parsed.date()
+        )
+    else:
+        return None
+
+    local_today = dt_util.now(ZoneInfo(TIMEZONE_AMSTERDAM)).date()
+    if (reading_day.year, reading_day.month) != (
+        local_today.year,
+        local_today.month,
+    ):
+        return None
+    return summary
 
 
 # Battery session data type
@@ -3206,11 +3245,7 @@ SENSOR_TYPES: tuple[FrankEnergieEntityDescription, ...] = (
         suggested_display_precision=2,
         authenticated=True,
         service_name=SERVICE_NAME_COSTS,
-        value_fn=lambda data: (
-            data[DATA_MONTH_SUMMARY].expectedCosts
-            if data[DATA_MONTH_SUMMARY] and data[DATA_MONTH_SUMMARY].expectedCosts
-            else None
-        ),
+        value_fn=lambda data: getattr(_current_month_summary(data), "expectedCosts", None),
         attr_fn=lambda data: (
             {
                 "Description": data[
@@ -3232,11 +3267,7 @@ SENSOR_TYPES: tuple[FrankEnergieEntityDescription, ...] = (
         suggested_display_precision=2,
         authenticated=True,
         service_name=SERVICE_NAME_COSTS,
-        value_fn=lambda data: (
-            data[DATA_MONTH_SUMMARY].expectedCostsPerDay
-            if data[DATA_MONTH_SUMMARY] and data[DATA_MONTH_SUMMARY].expectedCostsPerDay
-            else None
-        ),
+        value_fn=lambda data: getattr(_current_month_summary(data), "expectedCostsPerDay", None),
         attr_fn=lambda data: (
             {
                 ATTR_LAST_UPDATE: data[DATA_MONTH_SUMMARY].lastMeterReadingDate,
@@ -3259,12 +3290,7 @@ SENSOR_TYPES: tuple[FrankEnergieEntityDescription, ...] = (
         suggested_display_precision=2,
         authenticated=True,
         service_name=SERVICE_NAME_COSTS,
-        value_fn=lambda data: (
-            data[DATA_MONTH_SUMMARY].costs_per_day_till_now
-            if data[DATA_MONTH_SUMMARY]
-            and data[DATA_MONTH_SUMMARY].costs_per_day_till_now
-            else None
-        ),
+        value_fn=lambda data: getattr(_current_month_summary(data), "costs_per_day_till_now", None),
         attr_fn=lambda data: (
             {
                 ATTR_LAST_UPDATE: data[DATA_MONTH_SUMMARY].lastMeterReadingDate,
