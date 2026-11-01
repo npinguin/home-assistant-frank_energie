@@ -2752,9 +2752,7 @@ async def test_price_coordinator_retries_six_hour_gas_today_and_preserves_partia
         gas=PriceData([], energy_type="gas"),
         energy_country="BE",
     )
-    coordinator._fetch_prices_with_fallback = AsyncMock(
-        side_effect=[shorter, complete]
-    )
+    coordinator._fetch_prices_with_fallback = AsyncMock(side_effect=[shorter, complete])
     first = await coordinator._async_update_data()
     assert len(first[DATA_GAS].all) == 6
 

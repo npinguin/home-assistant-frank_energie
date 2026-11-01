@@ -20,8 +20,8 @@ def test_candidate_publisher_is_version_neutral_and_gate_complete() -> None:
     assert "docs/candidates/TEST_RELEASE_CANDIDATE.json" in source
     assert "workflow_dispatch:" in source
     assert "fix/be-price-provenance-truth" in source
-    assert "candidate.get(\"version\")" in source
-    assert "manifest[\"version\"]" in source
+    assert 'candidate.get("version")' in source
+    assert 'manifest["version"]' in source
     assert "pyproject.toml" in source
     assert "python-frank-energie==2026.9.20" in source
     for check in (
@@ -37,7 +37,7 @@ def test_candidate_publisher_is_version_neutral_and_gate_complete() -> None:
     assert 'test "$CURRENT" = "$GITHUB_SHA"' in source
     assert "gh release view" in source and "git/ref/tags/" in source
     assert "--prerelease" in source and "SHA256SUMS.txt" in source
-    assert "--target \"$GITHUB_SHA\"" in source
+    assert '--target "$GITHUB_SHA"' in source
     assert "v2026.10.31.1" not in source
     assert "v2026.10.31.2" not in source
     assert "v2026.11.1.1" not in source
