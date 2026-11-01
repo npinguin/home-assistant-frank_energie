@@ -358,7 +358,7 @@ def test_full_energy_total_requires_proven_electricity_and_gas_components():
     assert finance_reading(scoped(source), "actual_total") == (61.2, "available")
     assert finance_reading(scoped(source), "expected_total") == (80.0, "available")
     without_gas = {
-        key: value for key, value in source.items() if not key.startswith("gas")
+        key: value for key, value in source.items() if not key.startswith("gas") and key != "expectedCostsGas"
     }
     assert finance_reading(scoped(without_gas), "actual_total") == (
         None,
