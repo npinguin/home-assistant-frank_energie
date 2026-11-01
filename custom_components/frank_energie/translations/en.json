@@ -1149,6 +1149,28 @@
       },
       "finance_previous_feed_in_kwh": {
         "name": "Feed-in energy — previous month"
+      },
+      "finance_current_readiness": {
+        "name": "Financial source readiness — current month",
+        "state": {
+          "not_published": "No monthly data",
+          "contract_unverified": "Contract not verified",
+          "electricity_missing": "Electricity costs missing",
+          "gas_missing": "Gas costs missing",
+          "provider_total_missing": "Provider total missing",
+          "provider_components_present": "Provider components reported"
+        }
+      },
+      "finance_previous_readiness": {
+        "name": "Financial source readiness — previous month",
+        "state": {
+          "not_published": "No monthly data",
+          "contract_unverified": "Contract not verified",
+          "electricity_missing": "Electricity costs missing",
+          "gas_missing": "Gas costs missing",
+          "provider_total_missing": "Provider total missing",
+          "provider_components_present": "Provider components reported"
+        }
       }
     }
   },
