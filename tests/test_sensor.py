@@ -1744,7 +1744,8 @@ def test_real_be_graphql_models_reach_gas_forecast_and_usage_sensors(freezer) ->
         return FrankEnergieSensor(coordinator, description, entry)
 
     forecast = entity("gas_tomorrow_avg", price_coordinator)
-    assert forecast.native_value is not None
+    # Six source hours remain visible individually, not as a full-day average.
+    assert forecast.native_value is None
     assert forecast.device_info["model"] == "Gasprices"
     assert len(forecast.extra_state_attributes["tomorrow_prices"]) == 6
 
