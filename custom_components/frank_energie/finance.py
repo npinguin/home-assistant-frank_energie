@@ -25,6 +25,8 @@ class MonthlyFinanceSnapshot:
     month: str
     insights: MonthInsights
     retrieved_at: datetime
+    # Raw field presence captured before the pinned parser replaces null with 0.
+    source_states: dict[str, str] | None = None
 
 
 def month_keys(today: date) -> tuple[str, str]:
@@ -60,6 +62,8 @@ _FIELDS: dict[str, tuple[str | None, str, str | None]] = {
     "gas_m3": ("gasDifference", "actualUsage", "m3"),
     "feed_in_costs": ("feedInDifference", "actualCosts", None),
     "feed_in_kwh": ("feedInDifference", "actualUsage", "kwh"),
+    "actual_total": (None, "actualCostsUntilLastMeterReading", None),
+    "expected_to_reading": (None, "expectedCostsUntilLastMeterReading", None),
     "expected_total": (None, "expectedCosts", None),
     "expected_electricity": (None, "expectedCostsElectricity", None),
     "expected_gas": (None, "expectedCostsGas", None),
@@ -119,9 +123,28 @@ def finance_reading(
     if not math.isfinite(number):
         return None, "invalid_value"
 
-    if number == 0:
-        # Difference.from_dict and MonthInsights.from_dict in pinned
-        # python-frank-energie==2026.9.20 turn absent numeric fields into 0.
+    # The pinned client maps absent numeric fields to 0.0. Inspect the raw
+    # field presence (captured by the existing, redacted GraphQL observer)
+    # before accepting either a zero or a nonzero result.
+    source_field = (
+        f"{difference_name}.{field_name}" if difference_name else field_name
+    )
+    states = snapshot.source_states
+    if states is not None:
+        source_state = states.get(source_field)
+        if source_state is None:
+            return None, "source_field_unverified"
+        if source_state in ("missing", "null"):
+            return None, "source_field_missing"
+        if source_state not in ("zero", "positive", "negative"):
+            return None, "source_field_invalid"
+        parsed_sign = (
+            "zero" if number == 0 else "positive" if number > 0 else "negative"
+        )
+        if parsed_sign != source_state:
+            return None, "source_parser_mismatch"
+    elif number == 0:
+        # No raw source evidence: this might be an actual zero or missing data.
         return None, "zero_unverified_by_client"
     return number, "available"
 
@@ -134,7 +157,8 @@ def finance_attributes(
     attrs: dict[str, object] = {
         "source": "Frank Energie monthInsights",
         "quality": quality,
-        "zero_policy": "withhold_ambiguous_zero",
+        "zero_policy": "allow_only_source_verified_zero",
+        "raw_field_presence_verified": snapshot is not None and snapshot.source_states is not None,
     }
     if snapshot is None:
         return attrs
