@@ -1,6 +1,6 @@
 """Integration-facing monthly finance polling and entity lifecycle guards."""
 
-from datetime import datetime
+from datetime import datetime, timedelta
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, call
 from zoneinfo import ZoneInfo
@@ -189,3 +189,46 @@ def test_all_monthly_keys_translated_in_all_shipped_locales():
         content = json.loads((root / lang).read_text(encoding="utf-8"))
         assert keys <= content["entity"]["sensor"].keys(), lang
         assert "monthly_finance_enabled" in content["options"]["step"]["user"]["data"]
+
+
+@pytest.mark.asyncio
+async def test_previous_month_last_good_survives_provider_outage_next_day():
+    """Keep previously verified historical evidence and retry failed refresh."""
+    coordinator, _, api = _statistics_coordinator(enabled=True)
+    first = await coordinator._async_update_data()
+    previous_value = first[DATA_MONTH_INSIGHTS_PREVIOUS]
+    assert previous_value is not None
+    prior_key = coordinator._previous_finance_cache_key
+    assert prior_key is not None
+    coordinator._previous_finance_cache_key = (
+        prior_key[0],
+        prior_key[1],
+        prior_key[2] - timedelta(days=1),
+    )
+    _, previous = month_keys(datetime.now(ZoneInfo("Europe/Amsterdam")).date())
+
+    async def fail_previous(_site, period):
+        if period == previous:
+            raise TimeoutError("temporary source outage")
+        return SimpleNamespace(lastMeterReadingDate=datetime.now().astimezone())
+
+    api.month_insights.side_effect = fail_previous
+    second = await coordinator._async_update_data()
+    assert second[DATA_MONTH_INSIGHTS_PREVIOUS] is previous_value
+    await coordinator._async_update_data()
+    assert coordinator._previous_finance_snapshot is previous_value
+
+    api.month_insights.side_effect = None
+    third = await coordinator._async_update_data()
+    assert third[DATA_MONTH_INSIGHTS_PREVIOUS] is not previous_value
+
+
+@pytest.mark.asyncio
+async def test_previous_month_cached_evidence_never_crosses_sites():
+    coordinator, entry, api = _statistics_coordinator(enabled=True)
+    first = await coordinator._async_update_data()
+    assert first[DATA_MONTH_INSIGHTS_PREVIOUS] is not None
+    entry.data["site_reference"] = "SITE_B"
+    api.month_insights.side_effect = TimeoutError("other site unavailable")
+    second = await coordinator._async_update_data()
+    assert second[DATA_MONTH_INSIGHTS_PREVIOUS] is None
