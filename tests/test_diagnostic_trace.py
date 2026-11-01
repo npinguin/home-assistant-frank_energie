@@ -183,14 +183,15 @@ def test_graphql_trace_stays_bounded_and_rejects_untrusted_operation_names() -> 
 
 def test_month_source_states_are_not_confused_by_parallel_periods_or_failures():
     trace = DiagnosticTrace()
-    response = lambda gas: {
-        "data": {
-            "monthInsights": {
-                "lastMeterReadingDate": "2026-10-30T00:00:00Z",
-                "gasDifference": {"actualCosts": gas},
+    def response(gas):
+        return {
+            "data": {
+                "monthInsights": {
+                    "lastMeterReadingDate": "2026-10-30T00:00:00Z",
+                    "gasDifference": {"actualCosts": gas},
+                }
             }
         }
-    }
     trace.record(
         "graphql_account",
         "ok",
