@@ -1165,9 +1165,16 @@
           "interval_chargers": "Intervalle d'interrogation - Chargeurs (5-60 minutes, par défaut : 5)",
           "interval_vehicles": "Intervalle d'interrogation - Véhicules (5-60 minutes, par défaut : 15)",
           "interval_pv": "Intervalle d'interrogation - PV (5-60 minutes, par défaut : 5)",
-          "monthly_finance_enabled": "Récupérer la consommation et les coûts mensuels (requêtes API supplémentaires)"
+          "monthly_finance_enabled": "Récupérer la consommation et les coûts mensuels (requêtes API supplémentaires)",
+          "market_cheap_hours": "Heures les moins chères du marché par jour (1–12, défaut 4)"
         },
         "title": "Se connecter à Frank Energie"
+      },
+      "init": {
+        "title": "Options des prix du marché public",
+        "data": {
+          "market_cheap_hours": "Heures les moins chères du marché par jour (1–12, défaut 4)"
+        }
       }
     }
   },

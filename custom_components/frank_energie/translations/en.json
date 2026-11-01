@@ -1165,9 +1165,16 @@
           "interval_chargers": "Polling Interval - Chargers (5-60 minutes, default: 5)",
           "interval_vehicles": "Polling Interval - Vehicles (5-60 minutes, default: 15)",
           "interval_pv": "Polling Interval - PV (5-60 minutes, default: 5)",
-          "monthly_finance_enabled": "Collect monthly usage and costs (extra account API requests)"
+          "monthly_finance_enabled": "Collect monthly usage and costs (extra account API requests)",
+          "market_cheap_hours": "Cheapest market-price hours per day (1–12; default 4)"
         },
         "title": "Sign in to Frank Energie"
+      },
+      "init": {
+        "title": "Public market-price options",
+        "data": {
+          "market_cheap_hours": "Cheapest market-price hours per day (1–12; default 4)"
+        }
       }
     }
   },

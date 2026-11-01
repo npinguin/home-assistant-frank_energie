@@ -82,7 +82,14 @@
           "interval_chargers": "Ophaalinterval - Opladers (5-60 minuten, standaard: 5)",
           "interval_vehicles": "Ophaalinterval - Voertuigen (5-60 minuten, standaard: 15)",
           "interval_pv": "Ophaalinterval - PV (5-60 minuten, standaard: 5)",
-          "monthly_finance_enabled": "Maandverbruik en -kosten ophalen (extra API-aanvragen)"
+          "monthly_finance_enabled": "Maandverbruik en -kosten ophalen (extra API-aanvragen)",
+          "market_cheap_hours": "Goedkoopste marktprijsuren per dag (1–12; standaard 4)"
+        }
+      },
+      "init": {
+        "title": "Opties publieke marktprijzen",
+        "data": {
+          "market_cheap_hours": "Goedkoopste marktprijsuren per dag (1–12; standaard 4)"
         }
       }
     }
