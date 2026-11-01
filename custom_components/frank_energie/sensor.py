@@ -3245,7 +3245,9 @@ SENSOR_TYPES: tuple[FrankEnergieEntityDescription, ...] = (
         suggested_display_precision=2,
         authenticated=True,
         service_name=SERVICE_NAME_COSTS,
-        value_fn=lambda data: getattr(_current_month_summary(data), "expectedCosts", None),
+        value_fn=lambda data: getattr(
+            _current_month_summary(data), "expectedCosts", None
+        ),
         attr_fn=lambda data: (
             {ATTR_LAST_UPDATE: summary.lastMeterReadingDate}
             if (summary := _current_month_summary(data)) is not None
@@ -3261,7 +3263,9 @@ SENSOR_TYPES: tuple[FrankEnergieEntityDescription, ...] = (
         suggested_display_precision=2,
         authenticated=True,
         service_name=SERVICE_NAME_COSTS,
-        value_fn=lambda data: getattr(_current_month_summary(data), "expectedCostsPerDay", None),
+        value_fn=lambda data: getattr(
+            _current_month_summary(data), "expectedCostsPerDay", None
+        ),
         attr_fn=lambda data: (
             {ATTR_LAST_UPDATE: summary.lastMeterReadingDate}
             if (summary := _current_month_summary(data)) is not None
@@ -3277,7 +3281,9 @@ SENSOR_TYPES: tuple[FrankEnergieEntityDescription, ...] = (
         suggested_display_precision=2,
         authenticated=True,
         service_name=SERVICE_NAME_COSTS,
-        value_fn=lambda data: getattr(_current_month_summary(data), "costs_per_day_till_now", None),
+        value_fn=lambda data: getattr(
+            _current_month_summary(data), "costs_per_day_till_now", None
+        ),
         attr_fn=lambda data: (
             {ATTR_LAST_UPDATE: summary.lastMeterReadingDate}
             if (summary := _current_month_summary(data)) is not None
