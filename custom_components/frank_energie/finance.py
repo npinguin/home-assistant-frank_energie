@@ -31,6 +31,7 @@ class MonthlyFinanceSnapshot:
     # Selected-site contract truth; prevents presenting electricity-only totals
     # as complete on a contracted gas supply when gas is excluded by provider.
     gas_expected: bool | None = None
+    electricity_expected: bool | None = None
 
 
 def month_keys(today: date) -> tuple[str, str]:
@@ -121,6 +122,35 @@ def finance_reading(
     if (metric.startswith("gas_") or metric == "expected_gas") and gas_excluded:
         return None, "gas_excluded"
 
+    if metric in ("actual_total", "expected_to_reading", "expected_total"):
+        # A provider top-level total is not trustworthy as an electricity +
+        # gas cost if a contracted segment's financial contribution is absent.
+        # Requiring raw segment presence also protects against zero-fill in
+        # the pinned parser. Do not attempt to add segment charges: tariffs,
+        # fixed amounts and signed feed-in have independent accounting.
+        for segment, contracted in (
+            ("electricity", snapshot.electricity_expected),
+            ("gas", snapshot.gas_expected),
+        ):
+            if contracted is not True:
+                continue
+            if snapshot.source_states is None:
+                return None, f"{segment}_component_unverified"
+            fields = (
+                (f"expectedCosts{segment.capitalize()}",)
+                if metric == "expected_total"
+                else (
+                    f"{segment}Difference.actualCosts",
+                    f"{segment}Difference.actualUsage",
+                )
+            )
+            if any(
+                snapshot.source_states.get(field)
+                not in ("zero", "positive", "negative")
+                for field in fields
+            ):
+                return None, f"{segment}_component_missing"
+
     block = (
         insights
         if difference_name is None
@@ -177,6 +207,7 @@ def finance_attributes(
         "source": "Frank Energie monthInsights",
         "quality": quality,
         "zero_policy": "allow_only_source_verified_zero",
+        "cost_scope": "provider_month_insights_not_reconciled_invoice",
         "raw_field_presence_verified": snapshot is not None
         and snapshot.source_states is not None,
     }
