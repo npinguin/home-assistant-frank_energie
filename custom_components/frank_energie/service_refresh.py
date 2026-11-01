@@ -7,7 +7,6 @@ come only from the privacy-safe GraphQL observer, never HA state changes.
 
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
-from typing import Final
 
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 
@@ -40,10 +39,16 @@ class RefreshService:
 
 def service_refreshes(runtime_data: object) -> tuple[RefreshService, ...]:
     """Return only services present on this entry; never create ghost devices."""
-    price = runtime_data.price_coordinator
-    settings = runtime_data.settings_coordinator
-    statistics = runtime_data.statistics_coordinator
-    api_authenticated = bool(getattr(settings.api, "is_authenticated", False))
+    price = getattr(runtime_data, "price_coordinator", None) or getattr(
+        runtime_data, "coordinator", None
+    )
+    if price is None:
+        return ()
+    settings = getattr(runtime_data, "settings_coordinator", None)
+    statistics = getattr(runtime_data, "statistics_coordinator", None)
+    api_authenticated = bool(
+        getattr(getattr(settings, "api", None), "is_authenticated", False)
+    )
 
     services = [
         RefreshService(
@@ -59,7 +64,7 @@ def service_refreshes(runtime_data: object) -> tuple[RefreshService, ...]:
             )
         )
 
-    if api_authenticated:
+    if api_authenticated and statistics is not None and settings is not None:
         services.extend(
             (
                 RefreshService(
@@ -77,7 +82,7 @@ def service_refreshes(runtime_data: object) -> tuple[RefreshService, ...]:
             )
         )
 
-        inventory: Final[tuple[tuple[str, str, str, str, str], ...]] = (
+        inventory: tuple[tuple[str, str, str, str, str], ...] = (
             ("batteries", SERVICE_NAME_BATTERIES, "battery_coordinator",
              DATA_BATTERIES, "batteries"),
             ("chargers", SERVICE_NAME_ENODE_CHARGERS, "charger_coordinator",
@@ -129,6 +134,10 @@ def service_refresh_attributes(
         ),
         # This is an estimate, not HA's private internal timer deadline.
         "next_refresh_is_estimate": True,
+        "polling_notes": (
+            "Coordinator interval, not source publication or an exact HA timer. "
+            "May change after each refresh; requests pause 00:00-01:00 UTC."
+        ),
         "next_estimated_refresh_utc": None,
         "last_api_request_utc": None,
         "last_successful_api_response_utc": None,
