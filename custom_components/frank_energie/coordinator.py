@@ -3087,8 +3087,7 @@ class FrankEnergiePriceCoordinator(FrankEnergieCoordinator):
             (
                 minutes
                 for series in (electricity, gas)
-                if (minutes := getattr(series, "resolution_minutes", None))
-                in (15, 60)
+                if (minutes := getattr(series, "resolution_minutes", None)) in (15, 60)
                 and getattr(series, "all", None)
             ),
             15 if self.resolution == "PT15M" else 60,
