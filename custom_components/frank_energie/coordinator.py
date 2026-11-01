@@ -3522,7 +3522,10 @@ class FrankEnergieStatisticsCoordinator(FrankEnergieCoordinator):
         if result is None:
             return None
         return MonthlyFinanceSnapshot(
-            month=period, insights=result, retrieved_at=datetime.now(ZoneInfo("UTC"))
+            month=period,
+            insights=result,
+            retrieved_at=datetime.now(ZoneInfo("UTC")),
+            source_states=self._diagnostic_trace.source_states_for_month(period),
         )
 
     async def _fetch_previous_finance(
