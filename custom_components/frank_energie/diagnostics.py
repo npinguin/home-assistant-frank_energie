@@ -777,7 +777,9 @@ async def async_get_config_entry_diagnostics(
         ),
         "source_check_evidence": source_check_evidence(
             getattr(coordinator, "_diagnostic_trace", None),
-            authenticated=bool(getattr(coordinator.api, "is_authenticated", False)),
+            authenticated=bool(
+                getattr(getattr(coordinator, "api", None), "is_authenticated", False)
+            ),
             site_selected=bool(entry.data.get("site_reference")),
             monthly_finance_enabled=bool(
                 entry.options.get("monthly_finance_enabled", False)
