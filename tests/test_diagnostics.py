@@ -8,6 +8,7 @@ from decimal import Decimal
 from enum import Enum
 from types import SimpleNamespace
 from uuid import UUID
+from zoneinfo import ZoneInfo
 from unittest.mock import MagicMock
 
 import pytest
