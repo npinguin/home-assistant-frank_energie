@@ -1648,14 +1648,18 @@ async def test_gas_sensor_registration_follows_selected_site_not_first_site(
     gas_price_keys = {
         entity.entity_description.key
         for entity in added
-        if getattr(getattr(entity, "entity_description", None), "service_name", None)
-        == SERVICE_NAME_GAS_PRICES
+        if (
+            getattr(getattr(entity, "entity_description", None), "service_name", None)
+            == SERVICE_NAME_GAS_PRICES
+        )
     }
     gas_usage_keys = {
         entity.entity_description.key
         for entity in added
-        if getattr(getattr(entity, "entity_description", None), "service_name", None)
-        == SERVICE_NAME_USAGE
+        if (
+            getattr(getattr(entity, "entity_description", None), "service_name", None)
+            == SERVICE_NAME_USAGE
+        )
         and entity.entity_description.key
         in (
             "costs_gas_yesterday",
