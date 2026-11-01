@@ -754,6 +754,74 @@ class FrankEnergieCoordinator(DataUpdateCoordinator[FrankEnergieData]):
                 return True
         return False
 
+    def _today_cache_covers_selected_site(
+        self, cached: MarketPrices | None, today: date
+    ) -> bool:
+        """A partial subscribed gas day cannot freeze today's price cache.
+
+        A selected-site subscription is authoritative. Anonymous or unresolved
+        sites retain the existing date-based cache policy until a source
+        subscription can be established.
+        """
+        if cached is None:
+            return False
+        if not self.api.is_authenticated or not (
+            self.user_electricity_enabled or self.user_gas_enabled
+        ):
+            return True
+        return all(
+            not enabled or self._covers_local_day(series, today)
+            for enabled, series in (
+                (self.user_electricity_enabled, cached.electricity),
+                (self.user_gas_enabled, cached.gas),
+            )
+        )
+
+    @staticmethod
+    def _preserve_today_source_coverage(
+        previous: MarketPrices | None, fetched: MarketPrices, today: date
+    ) -> MarketPrices:
+        """Do not erase known current-day slots with a shorter provider reply.
+
+        Equal-coverage responses are replaced, allowing updated tariffs; only
+        a strictly less complete segment reuses its still-dated cached source.
+        """
+        if previous is None:
+            return fetched
+
+        timezone_local = ZoneInfo(TIMEZONE_AMSTERDAM)
+
+        def current_day_count(series: PriceData | None) -> int:
+            if series is None:
+                return 0
+            return sum(
+                1
+                for price in series.all
+                if isinstance(getattr(price, "date_from", None), datetime)
+                and price.date_from.tzinfo is not None
+                and price.date_from.astimezone(timezone_local).date() == today
+            )
+
+        electricity = (
+            previous.electricity
+            if current_day_count(previous.electricity)
+            > current_day_count(fetched.electricity)
+            else fetched.electricity
+        )
+        gas = (
+            previous.gas
+            if current_day_count(previous.gas) > current_day_count(fetched.gas)
+            else fetched.gas
+        )
+        if electricity is fetched.electricity and gas is fetched.gas:
+            return fetched
+        return MarketPrices(
+            electricity=electricity,
+            gas=gas,
+            energy_country=fetched.energy_country,
+            energy_type=fetched.energy_type,
+        )
+
     def _tomorrow_cache_covers_selected_site(
         self, cached: MarketPrices, tomorrow: date
     ) -> bool:
@@ -2831,28 +2899,60 @@ class FrankEnergiePriceCoordinator(FrankEnergieCoordinator):
         return False
 
     def _is_cache_resolution_valid(self) -> bool:
-        """Check whether cached price intervals match the effective query resolution."""
-        if not self._static_prices_today or not self.config_entry:
+        """Validate cache granularity without confusing market query and BE tariff.
+
+        Belgian MODEL customer prices can legitimately be hourly even when the
+        public market query is configured for 15-minute resolution. Only a
+        verified MODEL contract for the selected site allows that difference.
+        """
+        if self._static_prices_today is None or self.config_entry is None:
             return True
 
-        price_series = (
-            self._static_prices_today.electricity or self._static_prices_today.gas
+        series = (
+            self._static_prices_today.electricity,
+            self._static_prices_today.gas,
         )
-        if not price_series:
+        resolutions = {
+            segment.resolution_minutes
+            for segment in series
+            if segment is not None and segment.all
+        }
+        if not resolutions:
             return True
 
-        cached_res = price_series.resolution_minutes
         expected_res = 15 if self.resolution == "PT15M" else 60
+        if resolutions == {expected_res}:
+            return True
 
-        if cached_res != expected_res:
-            _LOGGER.debug(
-                "Cache resolution (%s) differs from config (%s), invalidating cache",
-                cached_res,
-                expected_res,
-            )
-            return False
+        selected_site = None
+        sites = (self.settings_coordinator.data or {}).get(DATA_USER_SITES)
+        if sites is not None:
+            for site in getattr(sites, "deliverySites", ()) or ():
+                if getattr(site, "reference", None) == self.site_reference:
+                    selected_site = site
+                    break
+            if (
+                selected_site is None
+                and getattr(sites, "reference", None) == self.site_reference
+            ):
+                selected_site = sites
 
-        return True
+        proposition = getattr(selected_site, "propositionType", None)
+        if (
+            self.api.is_authenticated
+            and isinstance(proposition, str)
+            and proposition.upper() == "MODEL"
+            and resolutions <= {15, 60}
+        ):
+            # These are source intervals, not the requested public resolution.
+            return True
+
+        _LOGGER.debug(
+            "Cached source resolutions %s do not match query resolution %s",
+            sorted(str(value) for value in resolutions),
+            expected_res,
+        )
+        return False
 
     def _is_cache_fresh(self, now_utc: datetime) -> bool:
         """Check if the loaded disk cache is fresh enough to skip API fetches."""
@@ -2865,6 +2965,8 @@ class FrankEnergiePriceCoordinator(FrankEnergieCoordinator):
         now_local = now_utc.astimezone(ZoneInfo(TIMEZONE_AMSTERDAM))
         today = now_local.date()
         if _amsterdam_date(self.last_fetch_today) != today:
+            return False
+        if not self._today_cache_covers_selected_site(self._static_prices_today, today):
             return False
 
         if (
@@ -3058,15 +3160,30 @@ class FrankEnergiePriceCoordinator(FrankEnergieCoordinator):
                 self._static_prices_today is None
                 or self.last_fetch_today is None
                 or _amsterdam_date(self.last_fetch_today) != today
+                or not self._today_cache_covers_selected_site(
+                    self._static_prices_today, today
+                )
             ):
                 try:
                     fetched_prices_today = await self._fetch_prices_with_fallback(
                         today, tomorrow, use_fallback=True
                     )
-                    prices_today = self._carry_forward_previous_day(
-                        fetched_prices_today, today
-                    )
-                    self._update_today_prices(prices_today)
+                    if fetched_prices_today is None or not any(
+                        _price_counts(fetched_prices_today)
+                    ):
+                        # A failed retry must not erase partial but still usable
+                        # current-day prices. The next poll retries again.
+                        prices_today = self._static_prices_today
+                        if prices_today is None:
+                            raise UpdateFailed("No current-day prices available")
+                    else:
+                        current_prices = self._carry_forward_previous_day(
+                            fetched_prices_today, today
+                        )
+                        prices_today = self._preserve_today_source_coverage(
+                            self._static_prices_today, current_prices, today
+                        )
+                        self._update_today_prices(prices_today)
                     self.last_fetch_today = now_utc
                     self._today_prices_logged = True
                 except Exception as err:
