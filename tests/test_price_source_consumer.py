@@ -6,6 +6,7 @@ These tests use synthetic timestamps and amounts; never real customer data.
 from datetime import UTC, date, datetime, timedelta
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
+from zoneinfo import ZoneInfo
 
 import pytest
 from python_frank_energie.models import MarketPrices, PriceData
@@ -15,7 +16,7 @@ from custom_components.frank_energie.sensor import FrankEnergieSensor
 
 
 def _prices(*, electricity: bool = True, gas: bool = True) -> MarketPrices:
-    first = datetime(2026, 10, 31, tzinfo=UTC)
+    first = datetime(2026, 10, 31, tzinfo=ZoneInfo("Europe/Amsterdam")).astimezone(UTC)
     slots = [
         {
             "from": (first + timedelta(hours=hour)).isoformat(),
