@@ -614,3 +614,12 @@ API diagnostics also gained read-only per-service `API status`
 the same bounded privacy-safe live request observer; cache restoration or a
 coordinator state publish is never fabricated as an API success. New device
 or provider requests are not introduced.
+
+
+## 2026-11-01 — qualified code, proposed v2026.11.1.6 HACS TEST
+
+Exact pre-version source SHA `130313831f7c6730ef2a0d19717b87631ac64ec7`
+passed Ruff, Flake8/pytest on Python 3.14 and 3.14.2 (473 passed,
+3 skipped), Quality Scale and Link Check. A new immutable test candidate
+is versioned on the exact head with the publisher's HACS/Hassfest/artifact
+checks required; previous HACS TEST v2026.11.1.5 is immutable.
