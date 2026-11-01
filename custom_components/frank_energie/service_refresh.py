@@ -52,14 +52,18 @@ def service_refreshes(runtime_data: object) -> tuple[RefreshService, ...]:
 
     services = [
         RefreshService(
-            "prices", SERVICE_NAME_PRICES, price,
+            "prices",
+            SERVICE_NAME_PRICES,
+            price,
             ("MarketPrices", "CustomerMarketPrices", "UserPrices"),
         ),
     ]
     if not api_authenticated or getattr(price, "user_gas_enabled", False):
         services.append(
             RefreshService(
-                "gas_prices", SERVICE_NAME_GAS_PRICES, price,
+                "gas_prices",
+                SERVICE_NAME_GAS_PRICES,
+                price,
                 ("MarketPrices", "CustomerMarketPrices", "UserPrices"),
             )
         )
@@ -68,29 +72,55 @@ def service_refreshes(runtime_data: object) -> tuple[RefreshService, ...]:
         services.extend(
             (
                 RefreshService(
-                    "costs", SERVICE_NAME_COSTS, statistics,
+                    "costs",
+                    SERVICE_NAME_COSTS,
+                    statistics,
                     ("MonthSummary", "MonthInsights", "Invoices"),
                 ),
                 RefreshService(
-                    "usage", SERVICE_NAME_USAGE, statistics,
+                    "usage",
+                    SERVICE_NAME_USAGE,
+                    statistics,
                     ("PeriodUsageAndCosts",),
                 ),
                 RefreshService(
-                    "user", SERVICE_NAME_USER, settings,
+                    "user",
+                    SERVICE_NAME_USER,
+                    settings,
                     ("Me", "UserSites"),
                 ),
             )
         )
 
         inventory: tuple[tuple[str, str, str, str, str], ...] = (
-            ("batteries", SERVICE_NAME_BATTERIES, "battery_coordinator",
-             DATA_BATTERIES, "batteries"),
-            ("chargers", SERVICE_NAME_ENODE_CHARGERS, "charger_coordinator",
-             DATA_ENODE_CHARGERS, "chargers"),
-            ("vehicles", SERVICE_NAME_ENODE_VEHICLES, "vehicle_coordinator",
-             DATA_ENODE_VEHICLES, "vehicles"),
-            ("solar", SERVICE_NAME_PV_SYSTEMS, "pv_coordinator",
-             DATA_PV_SYSTEMS, "systems"),
+            (
+                "batteries",
+                SERVICE_NAME_BATTERIES,
+                "battery_coordinator",
+                DATA_BATTERIES,
+                "batteries",
+            ),
+            (
+                "chargers",
+                SERVICE_NAME_ENODE_CHARGERS,
+                "charger_coordinator",
+                DATA_ENODE_CHARGERS,
+                "chargers",
+            ),
+            (
+                "vehicles",
+                SERVICE_NAME_ENODE_VEHICLES,
+                "vehicle_coordinator",
+                DATA_ENODE_VEHICLES,
+                "vehicles",
+            ),
+            (
+                "solar",
+                SERVICE_NAME_PV_SYSTEMS,
+                "pv_coordinator",
+                DATA_PV_SYSTEMS,
+                "systems",
+            ),
         )
         operations = {
             "batteries": ("SmartBatteries",),
@@ -107,9 +137,7 @@ def service_refreshes(runtime_data: object) -> tuple[RefreshService, ...]:
                 else None
             )
             if records:
-                services.append(
-                    RefreshService(key, name, coordinator, operations[key])
-                )
+                services.append(RefreshService(key, name, coordinator, operations[key]))
     return tuple(services)
 
 
