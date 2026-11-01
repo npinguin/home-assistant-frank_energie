@@ -41,7 +41,10 @@ _SOURCES: dict[str, tuple[str, str, str]] = {
 
 
 def _source_check(
-    events: list[dict[str, Any]], source: str, operation: str, root: str,
+    events: list[dict[str, Any]],
+    source: str,
+    operation: str,
+    root: str,
     period: str | None = None,
 ) -> dict[str, object]:
     """Report most recent matching request, without falsely promoting errors."""
