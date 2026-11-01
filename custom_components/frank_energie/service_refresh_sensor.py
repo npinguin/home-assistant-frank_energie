@@ -5,7 +5,9 @@ that Frank's API will publish data at that frequency. Attributes distinguish
 observed GraphQL requests from an estimated next polling time.
 """
 
-from homeassistant.components.sensor import SensorEntity
+from datetime import datetime
+
+from homeassistant.components.sensor import SensorDeviceClass, SensorEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import EntityCategory
 from homeassistant.helpers.device_registry import DeviceEntryType, DeviceInfo
@@ -67,3 +69,32 @@ class FrankEnergieRefreshIntervalSensor(CoordinatorEntity, SensorEntity):
     def extra_state_attributes(self) -> dict[str, object]:
         """Observed request times, estimate and coordinator health."""
         return service_refresh_attributes(self._service, self._trace)
+
+
+class FrankEnergieLastApiCheckSensor(FrankEnergieRefreshIntervalSensor):
+    """Show the actual latest provider check as a device-level timestamp."""
+
+    _attr_name = "Last API check"
+    _attr_icon = "mdi:cloud-clock"
+    _attr_device_class = SensorDeviceClass.TIMESTAMP
+    _attr_native_unit_of_measurement = None
+
+    def __init__(
+        self, service: RefreshService, entry: ConfigEntry, trace: object | None
+    ) -> None:
+        """Reuse coordinator and device identifiers from the timer entity."""
+        super().__init__(service, entry, trace)
+        self._attr_unique_id = f"{entry.entry_id}_last_api_check_{service.key}"
+
+    @property
+    def native_value(self) -> datetime | None:
+        """A provider request observed since restart, never an HA UI update."""
+        observed = service_refresh_attributes(
+            self._service, self._trace
+        ).get("last_api_request_utc")
+        return datetime.fromisoformat(observed) if isinstance(observed, str) else None
+
+    @property
+    def available(self) -> bool:
+        """A missing provider observation must not become a fake timestamp."""
+        return self.native_value is not None
