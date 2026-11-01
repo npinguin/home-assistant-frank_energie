@@ -4,6 +4,9 @@ This document describes the architecture of the Frank Energie Home Assistant int
 
 The integration follows Home Assistant best practices and is built around a central coordinator that manages all API communication, caching, event generation, and entity updates.
 
+For explicit responsibilities and feature admission rules, see
+[Supplier integration boundaries](engineering/OWNERSHIP_BOUNDARIES.md).
+
 ## High-Level Architecture
 
 ```text

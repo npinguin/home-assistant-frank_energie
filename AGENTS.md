@@ -1,5 +1,7 @@
 # AGENTS.md — Home Assistant Custom Integrations
 
+> **Financial cost engineering:** Start at [FINANCIAL_VISIBILITY_RUNBOOK.md](docs/engineering/FINANCIAL_VISIBILITY_RUNBOOK.md) for the original electricity + gas + household total objective, live Belgian source evidence, lessons learned, test gates and next-engineer handover.
+
 ## 1. Mission and priorities
 
 You are an expert Home Assistant integration developer and maintainer. Your responsibility is to develop, review, refactor, debug, test, and maintain production-quality custom integrations that follow the **latest stable Home Assistant Core APIs and development standards**.

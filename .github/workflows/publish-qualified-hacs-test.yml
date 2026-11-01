@@ -1,0 +1,177 @@
+name: Publish Qualified HACS Test
+
+# A single, version-neutral HACS TEST workflow. Editing code does not publish
+# a release: publication requires changing the explicit candidate marker.
+# This remains branch-scoped until the consolidated PR is live-accepted.
+on:
+  push:
+    branches:
+      - fix/be-price-provenance-truth
+    paths:
+      - docs/candidates/TEST_RELEASE_CANDIDATE.json
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: read
+
+concurrency:
+  # Independent exact-commit publication attempts cannot deadlock behind a
+  # stale run. Only the current reviewed branch HEAD can create its tag.
+  group: frank-energie-qualified-hacs-test-${{ github.sha }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    if: github.ref == 'refs/heads/fix/be-price-provenance-truth'
+    name: Exact-source qualified HACS prerelease
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out reviewed branch head
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Validate candidate and immutable version identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          import re
+          import tomllib
+          from pathlib import Path
+
+          candidate = json.loads(Path("docs/candidates/TEST_RELEASE_CANDIDATE.json").read_text())
+          manifest = json.loads(Path("custom_components/frank_energie/manifest.json").read_text())
+          project = tomllib.loads(Path("pyproject.toml").read_text())
+          version = candidate.get("version")
+          assert isinstance(version, str) and re.fullmatch(r"20\d{2}\.\d{1,2}\.\d{1,2}\.\d+", version)
+          assert version == manifest["version"] == project["tool"]["poetry"]["version"]
+          assert f'VERSION: Final[str] = "{version}"' in Path(
+              "custom_components/frank_energie/const.py"
+          ).read_text()
+          assert manifest["requirements"] == ["python-frank-energie==2026.9.20"]
+          hacs = json.loads(Path("hacs.json").read_text())
+          assert hacs["zip_release"] is True and hacs["filename"] == "frank_energie.zip"
+          assert Path(f"docs/candidates/{version}.md").is_file()
+          Path("/tmp/frank_test_version").write_text(version)
+          print(f"PASS candidate {version} / exact source identity")
+          PY
+
+      - name: Require all central PR checks at exact SHA
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 75); do
+            RUNS=$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs?head_sha=${GITHUB_SHA}&event=pull_request&per_page=100")
+            if printf '%s' "$RUNS" | python3 -c '
+          import json,sys
+          runs = json.load(sys.stdin)["workflow_runs"]
+          names = ("Flake8 and pytest", "Ruff", "Quality Scale Validation", "Link Check")
+          for name in names:
+              matches = [run for run in runs if run.get("name") == name]
+              if not matches:
+                  print(f"BLOCK missing required check: {name}")
+                  sys.exit(2)
+              latest = max(matches, key=lambda run: run.get("created_at", ""))
+              status = latest.get("conclusion") or latest.get("status") or "missing"
+              print(f"{name}: {status}")
+              if status != "success":
+                  sys.exit(2 if status in ("pending", "queued", "in_progress", "waiting") else 1)
+          '; then
+              echo "PASS all central checks on ${GITHUB_SHA}"
+              break
+            else
+              status=$?
+              if [ "$status" = "1" ]; then
+                echo "BLOCK central CI failed on exact source; no test release"
+                exit 1
+              fi
+            fi
+            if [ "$attempt" = "75" ]; then
+              echo "BLOCK central CI not green on exact source"
+              exit 1
+            fi
+            sleep 12
+          done
+
+      - name: Ruff lint at exact candidate
+        uses: astral-sh/ruff-action@278981a28ce3188b1e39527901f38254bf3aac89
+        with:
+          version: "0.15.18"
+          args: "check custom_components tests"
+
+      - name: Ruff format at exact candidate
+        uses: astral-sh/ruff-action@278981a28ce3188b1e39527901f38254bf3aac89
+        with:
+          version: "0.15.18"
+          args: "format --check --diff custom_components tests"
+
+      - name: HACS structure validation
+        uses: hacs/action@1ebf01c408f29afcb6406bd431bc98fd8cbb15aa
+        with:
+          category: integration
+
+      - name: Hassfest Home Assistant validation
+        uses: home-assistant/actions/hassfest@cd6f3635a740c84d8a14f6121a90068b8ece6bf6
+
+      - name: Create deterministic integration ZIP and checksum
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          python3 - <<'PY'
+          import hashlib
+          from pathlib import Path
+          from zipfile import ZIP_DEFLATED, ZipFile, ZipInfo
+
+          root = Path("custom_components/frank_energie")
+          output = Path("dist/frank_energie.zip")
+          with ZipFile(output, "w") as archive:
+              for path in sorted(root.rglob("*")):
+                  if not path.is_file() or "__pycache__" in path.parts or path.suffix == ".pyc":
+                      continue
+                  entry = ZipInfo(path.relative_to(root).as_posix(), date_time=(2020, 1, 1, 0, 0, 0))
+                  entry.compress_type = ZIP_DEFLATED
+                  entry.external_attr = 0o644 << 16
+                  archive.writestr(entry, path.read_bytes())
+          digest = hashlib.sha256(output.read_bytes()).hexdigest()
+          Path("dist/SHA256SUMS.txt").write_text(f"{digest}  frank_energie.zip\n")
+          print(f"PASS exact runtime ZIP: {digest}")
+          PY
+
+      - name: Publish immutable test release only if branch is still exact SHA
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          CURRENT=$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/fix/be-price-provenance-truth" --jq '.object.sha')
+          test "$CURRENT" = "$GITHUB_SHA" || { echo "BLOCK stale branch head"; exit 1; }
+          VERSION=$(cat /tmp/frank_test_version)
+          TAG="v${VERSION}"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "BLOCK published release cannot be replaced: $TAG"
+            exit 1
+          fi
+          if gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${TAG}" >/dev/null 2>&1; then
+            echo "BLOCK immutable tag already exists: $TAG"
+            exit 1
+          fi
+          {
+            echo "## Frank Energie $VERSION — controlled HACS TEST (not stable)"
+            echo
+            echo "Exact source SHA: \`${GITHUB_SHA}\`."
+            echo "No stable promotion, main merge or invoice acceptance is implied."
+            echo
+            cat "docs/candidates/${VERSION}.md"
+          } > /tmp/frank_test_notes.md
+          gh release create "$TAG" dist/frank_energie.zip dist/SHA256SUMS.txt \
+            --target "$GITHUB_SHA" \
+            --title "Frank Energie $VERSION — HACS TEST" \
+            --notes-file /tmp/frank_test_notes.md \
+            --prerelease
