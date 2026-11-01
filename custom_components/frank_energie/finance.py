@@ -28,6 +28,9 @@ class MonthlyFinanceSnapshot:
     retrieved_at: datetime
     # Raw field presence captured before the pinned parser replaces null with 0.
     source_states: dict[str, str] | None = None
+    # Selected-site contract truth; prevents presenting electricity-only totals
+    # as complete on a contracted gas supply when gas is excluded by provider.
+    gas_expected: bool | None = None
 
 
 def month_keys(today: date) -> tuple[str, str]:
@@ -103,9 +106,14 @@ def finance_reading(
         return None, "reading_outside_period"
 
     difference_name, field_name, required_unit = _FIELDS[metric]
-    if (metric.startswith("gas_") or metric == "expected_gas") and bool(
-        getattr(insights, "gasExcluded", False)
+    gas_excluded = bool(getattr(insights, "gasExcluded", False))
+    if gas_excluded and snapshot.gas_expected is True and metric in (
+        "actual_total",
+        "expected_to_reading",
+        "expected_total",
     ):
+        return None, "gas_excluded_from_total"
+    if (metric.startswith("gas_") or metric == "expected_gas") and gas_excluded:
         return None, "gas_excluded"
 
     block = (
