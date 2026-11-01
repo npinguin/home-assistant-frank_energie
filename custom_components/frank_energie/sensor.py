@@ -114,7 +114,10 @@ from .helpers import (
 )
 from .statistics import lowest_window
 from .service_refresh import service_refreshes
-from .service_refresh_sensor import FrankEnergieRefreshIntervalSensor
+from .service_refresh_sensor import (
+    FrankEnergieLastApiCheckSensor,
+    FrankEnergieRefreshIntervalSensor,
+)
 
 _DataT = TypeVar("_DataT")
 _LOGGER = logging.getLogger(__name__)
@@ -5513,13 +5516,15 @@ async def async_setup_entry(
         # batch: a CoordinatorEntity.async_update() would otherwise cause
         # avoidable network refreshes for each new cadence entity.
         trace = getattr(price_coordinator, "_diagnostic_trace", None)
-        async_add_entities(
-            [
-                FrankEnergieRefreshIntervalSensor(service, config_entry, trace)
-                for service in service_refreshes(runtime_data)
-            ],
-            update_before_add=False,
-        )
+        refresh_entities = []
+        for service in service_refreshes(runtime_data):
+            refresh_entities.extend(
+                (
+                    FrankEnergieRefreshIntervalSensor(service, config_entry, trace),
+                    FrankEnergieLastApiCheckSensor(service, config_entry, trace),
+                )
+            )
+        async_add_entities(refresh_entities, update_before_add=False)
     except Exception:
         _LOGGER.exception("Failed to add entities for entry %s", config_entry.entry_id)
         raise
