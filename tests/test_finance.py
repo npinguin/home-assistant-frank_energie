@@ -37,6 +37,8 @@ def _snapshot(
         feedInDifference=SimpleNamespace(
             actualCosts=-5.2, actualUsage=42.3, unit="kWh"
         ),
+        actualCostsUntilLastMeterReading=61.2,
+        expectedCostsUntilLastMeterReading=72.0,
         expectedCosts=80.0,
         expectedCostsElectricity=49.0,
         expectedCostsGas=22.0,
@@ -64,6 +66,8 @@ def test_calendar_period_keys_handle_year_boundary():
         ("gas_m3", 19.5),
         ("feed_in_costs", -5.2),
         ("feed_in_kwh", 42.3),
+        ("actual_total", 61.2),
+        ("expected_to_reading", 72.0),
         ("expected_total", 80.0),
         ("expected_electricity", 49.0),
         ("expected_gas", 22.0),
@@ -134,6 +138,64 @@ def test_pinned_api_parser_coerces_missing_fields_to_zero_and_is_withheld():
     assert finance_reading(reading, "electricity_costs") == (
         None,
         "zero_unverified_by_client",
+    )
+
+
+def test_raw_source_zero_is_accepted_only_if_explicitly_present():
+    snapshot = _snapshot(electricity_cost=0.0)
+    verified = MonthlyFinanceSnapshot(
+        month=snapshot.month,
+        insights=snapshot.insights,
+        retrieved_at=snapshot.retrieved_at,
+        source_states={"electricityDifference.actualCosts": "zero"},
+    )
+    assert finance_reading(verified, "electricity_costs") == (0.0, "available")
+    assert finance_attributes(verified, "electricity_costs")[
+        "raw_field_presence_verified"
+    ] is True
+
+
+@pytest.mark.parametrize("state", ["missing", "null"])
+def test_raw_source_missing_amount_is_never_interpreted_as_zero(state):
+    snapshot = _snapshot(electricity_cost=0.0)
+    verified = MonthlyFinanceSnapshot(
+        month=snapshot.month,
+        insights=snapshot.insights,
+        retrieved_at=snapshot.retrieved_at,
+        source_states={"electricityDifference.actualCosts": state},
+    )
+    assert finance_reading(verified, "electricity_costs") == (
+        None,
+        "source_field_missing",
+    )
+
+
+def test_raw_source_sign_mismatch_is_withheld():
+    snapshot = _snapshot(electricity_cost=37.5)
+    verified = MonthlyFinanceSnapshot(
+        month=snapshot.month,
+        insights=snapshot.insights,
+        retrieved_at=snapshot.retrieved_at,
+        source_states={"electricityDifference.actualCosts": "negative"},
+    )
+    assert finance_reading(verified, "electricity_costs") == (
+        None,
+        "source_parser_mismatch",
+    )
+
+
+def test_raw_source_state_must_cover_each_separate_finance_component():
+    snapshot = _snapshot()
+    verified = MonthlyFinanceSnapshot(
+        month=snapshot.month,
+        insights=snapshot.insights,
+        retrieved_at=snapshot.retrieved_at,
+        source_states={"electricityDifference.actualCosts": "positive"},
+    )
+    assert finance_reading(verified, "electricity_costs") == (37.5, "available")
+    assert finance_reading(verified, "gas_costs") == (
+        None,
+        "source_field_unverified",
     )
 
 
