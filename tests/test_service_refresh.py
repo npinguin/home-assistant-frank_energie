@@ -30,13 +30,19 @@ def _runtime(authenticated=True, gas=True, inventory=False):
     settings.api.is_authenticated = authenticated
     statistics = MagicMock(update_interval=timedelta(hours=1))
     battery = SimpleNamespace(
-        data={DATA_BATTERIES: SimpleNamespace(batteries=[object()] if inventory else [])}
+        data={
+            DATA_BATTERIES: SimpleNamespace(batteries=[object()] if inventory else [])
+        }
     )
     charger = SimpleNamespace(
-        data={"enode_chargers": SimpleNamespace(chargers=[object()] if inventory else [])}
+        data={
+            "enode_chargers": SimpleNamespace(chargers=[object()] if inventory else [])
+        }
     )
     vehicle = SimpleNamespace(
-        data={"enode_vehicles": SimpleNamespace(vehicles=[object()] if inventory else [])}
+        data={
+            "enode_vehicles": SimpleNamespace(vehicles=[object()] if inventory else [])
+        }
     )
     solar = SimpleNamespace(
         data={DATA_PV_SYSTEMS: SimpleNamespace(systems=[object()] if inventory else [])}
@@ -58,13 +64,23 @@ def test_service_bindings_do_not_create_missing_hardware_or_login_services():
 
     authenticated = service_refreshes(_runtime())
     assert [s.key for s in authenticated] == [
-        "prices", "gas_prices", "costs", "usage", "user"
+        "prices",
+        "gas_prices",
+        "costs",
+        "usage",
+        "user",
     ]
 
     no_gas = service_refreshes(_runtime(gas=False, inventory=True))
     assert [s.key for s in no_gas] == [
-        "prices", "costs", "usage", "user",
-        "batteries", "chargers", "vehicles", "solar"
+        "prices",
+        "costs",
+        "usage",
+        "user",
+        "batteries",
+        "chargers",
+        "vehicles",
+        "solar",
     ]
 
 
