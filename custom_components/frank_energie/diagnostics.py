@@ -27,6 +27,7 @@ from homeassistant.helpers import entity_registry as er
 from . import FrankEnergieEntryData
 from .finance import finance_evidence
 from .service_refresh import service_refreshes, service_refresh_attributes
+from .source_checks import source_check_evidence
 from .const import (
     SERVICE_NAME_COSTS,
     SERVICE_NAME_ELEC_PRICES,
@@ -773,6 +774,15 @@ async def async_get_config_entry_diagnostics(
             trace.snapshot()
             if (trace := getattr(coordinator, "_diagnostic_trace", None)) is not None
             else {"configured": False}
+        ),
+        "source_check_evidence": source_check_evidence(
+            getattr(coordinator, "_diagnostic_trace", None),
+            authenticated=bool(getattr(coordinator.api, "is_authenticated", False)),
+            site_selected=bool(entry.data.get("site_reference")),
+            monthly_finance_enabled=bool(
+                entry.options.get("monthly_finance_enabled", False)
+            ),
+            local_today=datetime.now(ZoneInfo("Europe/Brussels")).date(),
         ),
         # Explicit cross-coordinator evidence: a healthy price coordinator
         # cannot be used to infer invoice, metering or monthly-finance health.
