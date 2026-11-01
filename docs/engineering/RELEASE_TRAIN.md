@@ -417,12 +417,14 @@ target Home Assistant instance; do not infer a new published version.
   coordinator success **and** the expected source data is present. An
   incomplete recovery is explicitly `refresh_incomplete`, even if the
   request itself returned normally. The diagnostic outcome is privacy-safe.
-- **Finance period truth:** the three legacy cost sensors explicitly labeled
-  "this month" require a last-meter-reading date in the current local
-  calendar month. Previous-month readings are `unavailable`, **not** a
-  fabricated November cost; a real current-month zero remains valid.
-  Last-meter-reading-specific sensors are not silently renamed to current-month.
-  Invoice payment/advance metadata is no longer attached to monthly forecasts.
+- **Finance period truth:** all seven legacy MonthSummary cost sensors,
+  including the real total "actual cost until last meter reading" and the
+  three explicitly labeled "this month", require a last-meter-reading date
+  in the current local calendar month. Previous-month readings are
+  `unavailable`, **not** fabricated November costs; actual current-month
+  zero remains valid. Previous-month data belongs to explicit, period-keyed
+  MonthInsights, not an unlabeled legacy monthly cost. Invoice payment/advance
+  metadata is no longer attached to monthly forecasts.
 - **Regression tests:** diskcache startup liveness, 15/60-minute source
   transitions, mixed electricity/gas resolution, no extra provider API calls
   from the aligned clock, empty-source retry eligibility, real-vs-false recovery,
