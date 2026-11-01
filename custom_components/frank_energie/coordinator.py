@@ -2332,9 +2332,15 @@ class FrankEnergieCoordinator(DataUpdateCoordinator[FrankEnergieData]):
                 updated_data.pop(CONF_PASSWORD, None)
 
                 # Update the config entry with the new tokens
-                self.hass.config_entries.async_update_entry(
-                    self.config_entry, data=updated_data
-                )
+                if (
+                    self.config_entry.data.get(CONF_ACCESS_TOKEN)
+                    != updated_tokens.authToken
+                    or self.config_entry.data.get(CONF_TOKEN)
+                    != updated_tokens.refreshToken
+                ):
+                    self.hass.config_entries.async_update_entry(
+                        self.config_entry, data=updated_data
+                    )
 
                 _LOGGER.debug("Successfully renewed token")
 
@@ -2780,7 +2786,12 @@ class FrankEnergieSettingsCoordinator(FrankEnergieCoordinator):
                 self._fetch_user_data(),
             )
             result = _empty_data()
-            result[DATA_USER] = data_user
+            # A transient empty UserSites response must not silently turn an
+            # authenticated electricity/gas contract into no subscription.
+            # Keep earlier source-backed settings and retry on the next tick.
+            if self.api.is_authenticated and user_sites is None:
+                raise UpdateFailed("Authenticated delivery sites not available")
+            result[DATA_USER] = data_user or (self.data or {}).get(DATA_USER)
             result[DATA_USER_SITES] = user_sites
             result[DATA_TOKEN_EXPIRES_AT] = _get_token_expires_at(self.api)
             result[DATA_REFRESH_TOKEN_EXPIRES_AT] = _get_refresh_token_expires_at(

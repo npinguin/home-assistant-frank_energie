@@ -709,6 +709,26 @@ async def async_get_config_entry_diagnostics(
         "battery_session_coordinators": len(
             runtime_data.battery_session_coordinators,
         ),
+        "runtime_health": {
+            # No private fields; a green coordinator transport is not proof
+            # that the provider returned usable account or tariff data.
+            "authenticated": bool(coordinator.api.is_authenticated),
+            "site_metadata_present": bool(
+                (runtime_data.settings_coordinator.data or {}).get("user_sites")
+            ),
+            "current_electricity_price_present": (
+                getattr((coordinator.data or {}).get("electricity"), "current", None)
+                is not None
+            ),
+            "current_gas_price_present": (
+                getattr((coordinator.data or {}).get("gas"), "current", None)
+                is not None
+            ),
+            "maintenance_window_utc": datetime.now(ZoneInfo("UTC")).hour == 0,
+            "monthly_finance_opted_in": bool(
+                entry.options.get("monthly_finance_enabled", False)
+            ),
+        },
         "ha_entity_state_summary": _safe_ha_entity_state_summary(hass, entry),
         "graphql_request_evidence": (
             trace.snapshot()
@@ -756,5 +776,15 @@ async def async_get_config_entry_diagnostics(
             ),
         },
     }
+
+    health = diagnostics["runtime_health"]
+    warnings: list[str] = []
+    if health["authenticated"] and not health["site_metadata_present"]:
+        warnings.append("authenticated_site_metadata_missing")
+    if not health["current_electricity_price_present"] and not health[
+        "current_gas_price_present"
+    ]:
+        warnings.append("current_prices_missing")
+    diagnostics["runtime_warnings"] = warnings
 
     return async_redact_data(diagnostics, TO_REDACT)

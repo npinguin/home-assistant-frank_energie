@@ -46,6 +46,7 @@ _SOURCES: Final[frozenset[str]] = frozenset(
         "invoices",
         "period_usage",
         "month_insights",
+        "scheduler",
     }
 )
 _OUTCOMES: Final[frozenset[str]] = frozenset(
@@ -68,6 +69,10 @@ _OUTCOMES: Final[frozenset[str]] = frozenset(
         "public",
         "cached_fallback",
         "not_available",
+        "recovery_requested",
+        "refresh_ok",
+        "refresh_failed",
+        "skipped_maintenance",
     }
 )
 

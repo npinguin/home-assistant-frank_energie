@@ -360,3 +360,32 @@ See `docs/candidates/2026.11.1.2.md` for the exact live HA acceptance evidence.
 **Release promotion remains BLOCKED by real HA/Recorder, source finance
 reconciliation, and HACS rollback evidence.** Do not interpret a successful
 synthetic test or published test ZIP as stable acceptance.
+
+
+### HACS TEST 2026.11.1.3 — midnight automatic recovery (2026-11-01)
+
+After installing v2026.11.1.2, real HA diagnostics showed 129/144 entities
+unavailable, site segments false, missing electricity/gas prices and finance
+data, while all three coordinators claimed success. The in-app Refresh Prices
+button subsequently populated real electricity all-in and market rates;
+HA's empty Activity panel is *not* a GraphQL request trace.
+
+**Root failure:** the aligned timer only pushed cached sensor states outside
+13:00-15:00 local, missing the opportunity to heal a stale/empty coordinator
+after the provider's 00:00-01:00 UTC maintenance window. Authenticated
+UserSites unavailable was also accepted as a successful empty settings
+update; automatic API JWT rotation did not persist renewed credentials.
+
+**Corrections:** hourly recovery for missing selected-site metadata, wholly
+missing finance sources, and missing/stale/incomplete today prices; no
+requests during documented UTC maintenance; privacy-safe scheduler
+outcomes in the diagnostics trace; fail closed on missing authenticated
+UserSites rather than reporting a false successful contract empty state;
+persist successful automatic token rotations without making duplicate
+config writes; runtime health and warnings in diagnostics. Do not confuse
+price-button success with validation of gas/finance sources.
+
+**Release gates:** existing exact-SHA CI, Ruff, HACS, Hassfest, deterministic
+ZIP/checksum and immutable prerelease workflow; test actual new-day recovery,
+HACS install/reload, gas/price coverage, monthly finance and HA Recorder
+separately before stable. PR remains Draft; main untouched.
