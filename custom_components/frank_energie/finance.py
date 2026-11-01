@@ -1,8 +1,9 @@
 """Conservative, source-backed calendar-month finance readings.
 
 Frank's pinned MonthInsights parser silently coerces absent difference amounts
-to 0.0. Until that upstream contract is fixed, zero MUST NOT be published as a
-verified monthly actual: genuine zero and missing data cannot be distinguished.
+to 0.0. The GraphQL observer therefore checks raw field presence before a
+parsed zero can be published as a verified monthly actual; without such
+evidence, missing data and a genuine zero cannot be distinguished.
 This module is intentionally free of Home Assistant and endpoint concerns.
 """
 
