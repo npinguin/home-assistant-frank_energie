@@ -6,7 +6,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceEntryType, DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
+from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, CoordinatorEntity
 
 from .const import (
     API_CONF_URL,
@@ -18,6 +18,11 @@ from .const import (
 )
 
 from .helpers import device_translation_key
+from .service_refresh import (
+    RefreshService,
+    service_refresh_attributes,
+    service_refreshes,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -37,18 +42,23 @@ async def async_setup_entry(
 
     entities: list[ButtonEntity] = []
 
-    # Main prices coordinator — always present
-    entities.append(
-        FrankEnergieRefreshButton(
-            coordinator=runtime_data.coordinator,
-            description=FrankEnergieButtonEntityDescription(
-                key="refresh_prices",
-                name="Refresh Frank Energie Prices",
-                service_name=SERVICE_NAME_PRICES,
-            ),
-            entry=entry,
+    # One button per existing logical service, reusing its source coordinator.
+    # Prices retains its established unique key/entity ID across upgrades.
+    trace = getattr(runtime_data.price_coordinator, "_diagnostic_trace", None)
+    for service in service_refreshes(runtime_data):
+        entities.append(
+            FrankEnergieRefreshButton(
+                coordinator=service.coordinator,
+                description=FrankEnergieButtonEntityDescription(
+                    key=f"refresh_{service.key}",
+                    name=f"Refresh {service.device_name}",
+                    service_name=service.device_name,
+                ),
+                entry=entry,
+                service=service,
+                trace=trace,
+            )
         )
-    )
 
     # Battery sessions — one button covering all battery session coordinators
     if runtime_data.battery_session_coordinators:
@@ -71,7 +81,7 @@ async def async_setup_entry(
         async_add_entities(entities)
 
 
-class FrankEnergieRefreshButton(ButtonEntity):
+class FrankEnergieRefreshButton(CoordinatorEntity, ButtonEntity):
     """Button to manually refresh a Frank Energie coordinator."""
 
     _attr_icon = "mdi:refresh"
@@ -83,7 +93,14 @@ class FrankEnergieRefreshButton(ButtonEntity):
         coordinator: DataUpdateCoordinator,  # at runtime any coordinator type
         description: FrankEnergieButtonEntityDescription,
         entry: ConfigEntry,
+        service: RefreshService | None = None,
+        trace: object | None = None,
     ) -> None:
+        super().__init__(coordinator)
+        self._service = service or RefreshService(
+            description.key, description.service_name, coordinator, ()
+        )
+        self._trace = trace
         self.entity_description = description  # type: ignore[override]
         self._attr_translation_key = description.translation_key or description.key
         self._attr_unique_id = f"{entry.entry_id}_{description.key}"
@@ -103,6 +120,11 @@ class FrankEnergieRefreshButton(ButtonEntity):
             configuration_url=API_CONF_URL,
             sw_version=VERSION,
         )
+
+    @property
+    def extra_state_attributes(self) -> dict[str, object]:
+        """Expose actual polling cadence and observed API calls on the button."""
+        return service_refresh_attributes(self._service, self._trace)
 
     async def async_press(self) -> None:
         """Handle button press to trigger manual refresh."""
