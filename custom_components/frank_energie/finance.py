@@ -103,9 +103,9 @@ def finance_reading(
         return None, "reading_outside_period"
 
     difference_name, field_name, required_unit = _FIELDS[metric]
-    if (
-        metric.startswith("gas_") or metric == "expected_gas"
-    ) and bool(getattr(insights, "gasExcluded", False)):
+    if (metric.startswith("gas_") or metric == "expected_gas") and bool(
+        getattr(insights, "gasExcluded", False)
+    ):
         return None, "gas_excluded"
 
     block = (
@@ -134,9 +134,7 @@ def finance_reading(
     # The pinned client maps absent numeric fields to 0.0. Inspect the raw
     # field presence (captured by the existing, redacted GraphQL observer)
     # before accepting either a zero or a nonzero result.
-    source_field = (
-        f"{difference_name}.{field_name}" if difference_name else field_name
-    )
+    source_field = f"{difference_name}.{field_name}" if difference_name else field_name
     states = snapshot.source_states
     if states is not None:
         source_state = states.get(source_field)
@@ -166,7 +164,8 @@ def finance_attributes(
         "source": "Frank Energie monthInsights",
         "quality": quality,
         "zero_policy": "allow_only_source_verified_zero",
-        "raw_field_presence_verified": snapshot is not None and snapshot.source_states is not None,
+        "raw_field_presence_verified": snapshot is not None
+        and snapshot.source_states is not None,
     }
     if snapshot is None:
         return attrs
@@ -188,6 +187,7 @@ def finance_attributes(
     if value is not None:
         attrs["value_status"] = "provider_reported"
     return attrs
+
 
 # Invoice amounts are deliberately excluded: Belgium bills consumption
 # adjustments later (often M+2), and invoice periods need not be usage months.
@@ -222,9 +222,7 @@ def finance_source_reconciliation(
     if current is None or month_summary is None:
         return "not_comparable"
     current_total, _quality = finance_reading(current, "actual_total")
-    summary_total = getattr(
-        month_summary, "actualCostsUntilLastMeterReadingDate", None
-    )
+    summary_total = getattr(month_summary, "actualCostsUntilLastMeterReadingDate", None)
     if current_total is None:
         return "insights_actual_total_unavailable"
     if (
