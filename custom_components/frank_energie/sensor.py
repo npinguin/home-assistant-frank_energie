@@ -126,6 +126,23 @@ _DataT = TypeVar("_DataT")
 _LOGGER = logging.getLogger(__name__)
 FORMAT_DATE = "%d-%m-%Y"
 
+# Current price entities consumed by HA Energy Basic need source semantics
+# alongside the numeric state; do not change their IDs or statistics.
+_PRICE_SOURCE_ENTITY_KEYS: Final[frozenset[str]] = frozenset(
+    {
+        "elec_markup",
+        "elec_market",
+        "elec_tax",
+        "elec_tax_markup",
+        "elec_fixed_kwh",
+        "elec_var_kwh",
+        "gas_markup",
+        "gas_market",
+        "gas_tax",
+        "gas_tax_markup",
+    }
+)
+
 _HAS_VIA_DEVICE_ID: Final[bool] = (
     "via_device_id"
     in inspect.signature(dr.DeviceRegistry.async_get_or_create).parameters
@@ -4519,9 +4536,33 @@ class FrankEnergieSensor(
             return {}
 
         try:
-            return self.entity_description.attr_fn(self.coordinator.data) or {}
+            attrs = dict(self.entity_description.attr_fn(self.coordinator.data) or {})
         except Exception:
-            return {}
+            attrs = {}
+
+        # The selected supplier price may contain anonymous public fallback
+        # or restored disk data. Do not expose it as a verified MODEL customer
+        # invoice rate to HA Energy Basic or automations.
+        key = self.entity_description.key
+        if key in _PRICE_SOURCE_ENTITY_KEYS:
+            segment = "gas" if key.startswith("gas_") else "electricity"
+            get_source = getattr(self.coordinator, "price_source_for", None)
+            origin = (
+                get_source(
+                    segment, datetime.now(ZoneInfo(TIMEZONE_AMSTERDAM)).date()
+                )
+                if callable(get_source)
+                else "cached_or_unverified"
+            )
+            attrs.update(
+                {
+                    "selected_price_origin": origin,
+                    "selected_price_segment": segment,
+                    "customer_billing_rate_verified": False,
+                    "cost_scope": "provider_price_not_reconciled_invoice",
+                }
+            )
+        return attrs
 
     @property
     def available(self) -> bool:
