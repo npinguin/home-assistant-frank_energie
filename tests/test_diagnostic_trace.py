@@ -239,3 +239,93 @@ def test_optional_smart_service_roots_keep_only_presence_metadata() -> None:
     assert metadata["response_roots"]["enodeChargers"] == "empty"
     assert metadata["response_roots"]["smartPvSystems"] == "present"
     assert "SECRET" not in str(metadata)
+
+
+def test_graphql_error_categories_are_useful_but_never_expose_messages() -> None:
+    """An actual GraphQL null/error carries safe cause and field metadata."""
+    response = {
+        "data": {"monthInsights": None},
+        "errors": [
+            {
+                "message": "Cannot return null for non-nullable field Account.private-id",
+                "path": ["monthInsights", "secret-id-999", "expectedCosts"],
+                "extensions": {
+                    "code": "INTERNAL_SERVER_ERROR",
+                    "account_id": "private-123",
+                },
+            },
+            {
+                "message": "Sensitive Graphql details, user=private123",
+                "path": ["unknown_secret_field"],
+                "extensions": {"code": "SECRET-PRIVATE-123"},
+            },
+        ],
+    }
+    result = _response_metadata(response)
+    assert result["graphql_error_count"] == 2
+    assert result["graphql_error_categories"] == [
+        "provider_internal",
+        "unclassified",
+    ]
+    assert result["graphql_error_roots"] == ["monthInsights"]
+    assert result["response_roots"] == {"monthInsights": "null"}
+    for secret in ("secret-id", "private-123", "PRIVATE-123"):
+        assert secret not in str(result)
+
+
+@pytest.mark.parametrize(
+    ("message", "category"),
+    [
+        ("Graphql validation error", "schema_validation"),
+        ("Cannot query field 'private' on type Query", "schema_validation"),
+        ("Cannot return null for non-nullable field X", "non_nullable_field"),
+        ("No reading dates found for user SECRET", "readings_unavailable"),
+        ("request-error:request-not-supported-in-country", "unsupported_country"),
+        ("Private arbitrary upstream traceback", "unclassified"),
+    ],
+)
+def test_graphql_error_message_matching_is_whitelisted(
+    message: str, category: str
+) -> None:
+    result = _response_metadata(
+        {
+            "data": {"monthInsights": None},
+            "errors": [{"message": message, "path": ["monthInsights"]}],
+        }
+    )
+    assert result["graphql_error_categories"] == [category]
+    assert result["graphql_error_roots"] == ["monthInsights"]
+    assert message not in str(result)
+
+
+@pytest.mark.asyncio
+async def test_graphql_error_classification_survives_real_observer() -> None:
+    """The observer never sends a probe or changes the returned response."""
+    response = {
+        "data": {"monthInsights": None},
+        "errors": [
+            {
+                "message": "Graphql validation error",
+                "path": ["monthInsights"],
+                "extensions": {"code": "GRAPHQL_VALIDATION_FAILED"},
+            }
+        ],
+    }
+
+    async def original_query(query, extra_headers=None):
+        return response
+
+    client = SimpleNamespace(_query=original_query)
+    trace = DiagnosticTrace()
+    attach_graphql_trace(client, trace, "graphql_account")
+    query = SimpleNamespace(
+        operation_name="MonthInsights",
+        variables={"date": "2026-11", "siteReference": "SECRET-ACCOUNT"},
+    )
+    assert await client._query(query) is response
+    event = trace.snapshot()["events"][0]
+    assert event["outcome"] == "graphql_errors"
+    assert event["graphql_error_categories"] == ["schema_validation"]
+    assert event["graphql_error_roots"] == ["monthInsights"]
+    assert event["period"] == "2026-11"
+    assert "SECRET-ACCOUNT" not in str(trace.snapshot())
