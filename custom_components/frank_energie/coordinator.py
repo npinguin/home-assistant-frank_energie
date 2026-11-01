@@ -112,6 +112,7 @@ from .const import (
 from .diagnostic_trace import DiagnosticTrace, attach_graphql_trace
 from .finance import MonthlyFinanceSnapshot, month_keys
 from .helpers import decrypt_password, price_cache_store
+from .price_coverage import covered_seconds_in_local_day, covers_local_day
 from .mutation_queue import MutationQueue
 
 _LOGGER = logging.getLogger(__name__)
@@ -719,40 +720,8 @@ class FrankEnergieCoordinator(DataUpdateCoordinator[FrankEnergieData]):
 
     @staticmethod
     def _covers_local_day(prices: PriceData | None, day: date) -> bool:
-        """Check actual, gap-free timestamp coverage, including 23/25-hour DST days."""
-        if prices is None or not prices.all:
-            return False
-
-        tz = ZoneInfo(TIMEZONE_AMSTERDAM)
-        utc = ZoneInfo("UTC")
-        start = datetime.combine(day, time.min, tzinfo=tz).astimezone(utc)
-        end = datetime.combine(day + timedelta(days=1), time.min, tzinfo=tz).astimezone(
-            utc
-        )
-        intervals: list[tuple[datetime, datetime]] = []
-        for price in prices.all:
-            first = getattr(price, "date_from", None)
-            last = getattr(price, "date_till", None)
-            if (
-                not isinstance(first, datetime)
-                or not isinstance(last, datetime)
-                or first.tzinfo is None
-                or last.tzinfo is None
-            ):
-                continue
-            first_utc, last_utc = first.astimezone(utc), last.astimezone(utc)
-            if first_utc < end and last_utc > start:
-                intervals.append((max(first_utc, start), min(last_utc, end)))
-
-        cursor = start
-        for first, last in sorted(intervals):
-            if first > cursor:
-                return False
-            if last > cursor:
-                cursor = last
-            if cursor >= end:
-                return True
-        return False
+        """Require real gap-free interval coverage, including 23/25-hour days."""
+        return covers_local_day(prices, day)
 
     def _today_cache_covers_selected_site(
         self, cached: MarketPrices | None, today: date
@@ -781,36 +750,25 @@ class FrankEnergieCoordinator(DataUpdateCoordinator[FrankEnergieData]):
     def _preserve_today_source_coverage(
         previous: MarketPrices | None, fetched: MarketPrices, today: date
     ) -> MarketPrices:
-        """Do not erase known current-day slots with a shorter provider reply.
+        """Keep the segment covering more real time, not the one with more slots.
 
-        Equal-coverage responses are replaced, allowing updated tariffs; only
-        a strictly less complete segment reuses its still-dated cached source.
+        Hourly and quarter-hour source intervals can differ, and duplicate
+        records must never count as additional coverage. Equal time coverage
+        prefers the new provider reply, allowing legitimate price revisions.
         """
         if previous is None:
             return fetched
 
-        timezone_local = ZoneInfo(TIMEZONE_AMSTERDAM)
-
-        def current_day_count(series: PriceData | None) -> int:
-            if series is None:
-                return 0
-            return sum(
-                1
-                for price in series.all
-                if isinstance(getattr(price, "date_from", None), datetime)
-                and price.date_from.tzinfo is not None
-                and price.date_from.astimezone(timezone_local).date() == today
-            )
-
         electricity = (
             previous.electricity
-            if current_day_count(previous.electricity)
-            > current_day_count(fetched.electricity)
+            if covered_seconds_in_local_day(previous.electricity, today)
+            > covered_seconds_in_local_day(fetched.electricity, today)
             else fetched.electricity
         )
         gas = (
             previous.gas
-            if current_day_count(previous.gas) > current_day_count(fetched.gas)
+            if covered_seconds_in_local_day(previous.gas, today)
+            > covered_seconds_in_local_day(fetched.gas, today)
             else fetched.gas
         )
         if electricity is fetched.electricity and gas is fetched.gas:
