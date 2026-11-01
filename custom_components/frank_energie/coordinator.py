@@ -2169,6 +2169,9 @@ class FrankEnergieCoordinator(DataUpdateCoordinator[FrankEnergieData]):
             )
 
         if not self.api.is_authenticated:
+            self._remember_price_sources(
+                start_date, public_prices, public_fresh=not fallback_from_cache
+            )
             self._record_price_fetch(
                 "price_selection",
                 _price_selection_outcome(
@@ -2187,6 +2190,9 @@ class FrankEnergieCoordinator(DataUpdateCoordinator[FrankEnergieData]):
                 return None
             _LOGGER.warning(
                 "Failed to fetch user prices, falling back to public prices"
+            )
+            self._remember_price_sources(
+                start_date, public_prices, public_fresh=not fallback_from_cache
             )
             self._record_price_fetch(
                 "price_selection",
@@ -2207,6 +2213,12 @@ class FrankEnergieCoordinator(DataUpdateCoordinator[FrankEnergieData]):
         has_gas = user_prices.gas is not None and getattr(user_prices.gas, "all", None)
 
         if has_electricity and has_gas:
+            self._remember_price_sources(
+                start_date,
+                user_prices,
+                customer_electricity=True,
+                customer_gas=True,
+            )
             self._cached_prices = user_prices
             self._record_price_fetch(
                 "price_selection", "customer", start_date, user_prices
@@ -2219,6 +2231,12 @@ class FrankEnergieCoordinator(DataUpdateCoordinator[FrankEnergieData]):
                 "No complete user prices for tomorrow (electricity=%s gas=%s), skipping fallback",
                 bool(has_electricity),
                 bool(has_gas),
+            )
+            self._remember_price_sources(
+                start_date,
+                user_prices,
+                customer_electricity=bool(has_electricity),
+                customer_gas=bool(has_gas),
             )
             self._record_price_fetch(
                 "price_selection",
@@ -2250,6 +2268,13 @@ class FrankEnergieCoordinator(DataUpdateCoordinator[FrankEnergieData]):
                 else PriceData([], "electricity")
             )
 
+        self._remember_price_sources(
+            start_date,
+            user_prices,
+            customer_electricity=bool(has_electricity),
+            customer_gas=bool(has_gas),
+            public_fresh=not fallback_from_cache,
+        )
         self._cached_prices = user_prices
         outcome = _price_selection_outcome(
             user_prices,
@@ -2778,6 +2803,64 @@ class FrankEnergiePriceCoordinator(FrankEnergieCoordinator):
         self.settings_coordinator = settings_coordinator
         self.update_interval = None
         self.store = price_cache_store(hass, config_entry.entry_id)
+        # Process-local provenance: a restored disk cache cannot certify
+        # a customer tariff or a fresh public response after HA restart.
+        self._price_sources_by_day: dict[str, dict[str, str]] = {}
+
+    def _remember_price_sources(
+        self,
+        day: date,
+        selected: MarketPrices | None,
+        *,
+        customer_electricity: bool = False,
+        customer_gas: bool = False,
+        public_fresh: bool = False,
+    ) -> None:
+        """Track selected segments separately without persisting false source proof."""
+        sources: dict[str, str] = {}
+        for segment, is_customer in (
+            ("electricity", customer_electricity),
+            ("gas", customer_gas),
+        ):
+            series = getattr(selected, segment, None)
+            if series is None or covered_seconds_in_local_day(series, day) <= 0:
+                sources[segment] = "unavailable"
+                continue
+            origin = (
+                "customer"
+                if is_customer
+                else "public"
+                if public_fresh
+                else "cached_unverified"
+            )
+            sources[segment] = (
+                origin if covers_local_day(series, day) else f"{origin}_partial"
+            )
+        self._price_sources_by_day[day.isoformat()] = sources
+        # Keep only the latest three local dates, not an unbounded history.
+        for previous in sorted(self._price_sources_by_day)[:-3]:
+            self._price_sources_by_day.pop(previous, None)
+
+    def price_source_for(self, segment: str, day: date) -> str:
+        """A public HA consumer can distinguish source evidence from a cache."""
+        if segment not in ("electricity", "gas"):
+            return "unverified"
+        return self._price_sources_by_day.get(day.isoformat(), {}).get(
+            segment, "cached_or_unverified"
+        )
+
+    def _selected_customer_source_needs_retry(self, day: date) -> bool:
+        """A complete public fallback is not a complete customer tariff."""
+        if not self.api.is_authenticated:
+            return False
+        sources = self._price_sources_by_day.get(day.isoformat(), {})
+        return any(
+            enabled and sources.get(segment) != "customer"
+            for segment, enabled in (
+                ("electricity", self.user_electricity_enabled),
+                ("gas", self.user_gas_enabled),
+            )
+        )
 
     def _parse_cached_data(self, cached_data: dict[str, Any]) -> None:
         """Parse cached data dictionary into coordinator state."""
@@ -3169,6 +3252,7 @@ class FrankEnergiePriceCoordinator(FrankEnergieCoordinator):
                 or not self._today_cache_covers_selected_site(
                     self._static_prices_today, today
                 )
+                or self._selected_customer_source_needs_retry(today)
             ):
                 try:
                     fetched_prices_today = await self._fetch_prices_with_fallback(
@@ -3186,14 +3270,33 @@ class FrankEnergiePriceCoordinator(FrankEnergieCoordinator):
                         current_prices = self._carry_forward_previous_day(
                             fetched_prices_today, today
                         )
+                        previous_prices = self._static_prices_today
                         prices_today = self._preserve_today_source_coverage(
-                            self._static_prices_today, current_prices, today
+                            previous_prices, current_prices, today
                         )
+                        # If preservation chooses an older interval series, its
+                        # original source cannot be inferred from the new reply.
+                        if previous_prices is not None:
+                            selected_sources = self._price_sources_by_day.get(
+                                today.isoformat(), {}
+                            )
+                            for segment in ("electricity", "gas"):
+                                retained = getattr(prices_today, segment, None)
+                                prior = getattr(previous_prices, segment, None)
+                                fresh = getattr(current_prices, segment, None)
+                                if retained is prior and retained is not fresh:
+                                    selected_sources[segment] = "cached_unverified"
                         self._update_today_prices(prices_today)
-                        # Timestamp only an actual, usable provider fetch.
-                        # Falling back to an old cache must remain retryable.
-                        self.last_fetch_today = now_utc
-                        self._today_prices_logged = True
+                        sources = self._price_sources_by_day.get(today.isoformat())
+                        cache_only = bool(sources) and not any(
+                            source.startswith(("customer", "public"))
+                            for source in sources.values()
+                        )
+                        # Never treat a restored/cache-only selection as an API
+                        # success. Keep retrying until real provider evidence.
+                        if not cache_only:
+                            self.last_fetch_today = now_utc
+                            self._today_prices_logged = True
                 except Exception as err:
                     await self._handle_fetch_exceptions(err)
                     if (
