@@ -4,6 +4,8 @@ This file is the short, version-neutral contract for Belgian support. The
 implementation remains a Home Assistant **supplier integration**, not a second
 energy optimizer, billing engine, or hardware controller. Historical release
 and runtime evidence belongs in `docs/engineering/RELEASE_TRAIN.md`.
+Formal product ownership and scope exclusions are defined in
+[`OWNERSHIP_BOUNDARIES.md`](OWNERSHIP_BOUNDARIES.md).
 
 ## Source authority
 

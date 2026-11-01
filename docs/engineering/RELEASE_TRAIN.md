@@ -623,3 +623,15 @@ passed Ruff, Flake8/pytest on Python 3.14 and 3.14.2 (473 passed,
 3 skipped), Quality Scale and Link Check. A new immutable test candidate
 is versioned on the exact head with the publisher's HACS/Hassfest/artifact
 checks required; previous HACS TEST v2026.11.1.5 is immutable.
+
+
+## 2026-11-01 — ownership decision after v2026.11.1.6
+
+Architecture boundary accepted in
+[`OWNERSHIP_BOUNDARIES.md`](OWNERSHIP_BOUNDARIES.md): the Frank Energie
+integration is a supplier API adapter. Fluvius/capacity pricing, metering,
+all-in household cost aggregation, historical P1 peaks and local optimization
+belong to HA Energy Basic / RHI Energy. The existing TEST market-hour entities
+are frozen compatibility-only, not a precedent to build an optimizer in the
+supplier integration. This documentation-only change does **not** alter
+versioned runtime code or republish any immutable release.
