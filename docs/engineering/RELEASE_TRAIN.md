@@ -425,6 +425,9 @@ target Home Assistant instance; do not infer a new published version.
   zero remains valid. Previous-month data belongs to explicit, period-keyed
   MonthInsights, not an unlabeled legacy monthly cost. Invoice payment/advance
   metadata is no longer attached to monthly forecasts.
+  Bounded diagnostics now report whether the meter-reading period matches the
+  current local month (`true`, `false` or unknown), without including the
+  private meter-reading date or any monetary amount.
 - **Regression tests:** diskcache startup liveness, 15/60-minute source
   transitions, mixed electricity/gas resolution, no extra provider API calls
   from the aligned clock, empty-source retry eligibility, real-vs-false recovery,
