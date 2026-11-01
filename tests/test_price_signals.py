@@ -1,6 +1,6 @@
 """Automation signals must not rank partial, corrupt or DST-misaligned data."""
 
-from datetime import UTC, date, datetime, timedelta
+from datetime import date, datetime, timedelta
 from types import SimpleNamespace
 
 import pytest
