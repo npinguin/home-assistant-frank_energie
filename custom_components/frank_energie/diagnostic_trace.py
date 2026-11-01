@@ -40,6 +40,82 @@ _RESPONSE_ROOTS: Final[frozenset[str]] = frozenset(
         "userSmartFeedIn",
     }
 )
+# Explicit allowlist only. GraphQL error messages and arbitrary extension values
+# can contain user identifiers and must never enter diagnostics.
+_GRAPHQL_ERROR_CODES: Final[dict[str, str]] = {
+    "GRAPHQL_VALIDATION_FAILED": "schema_validation",
+    "BAD_USER_INPUT": "invalid_request",
+    "UNAUTHENTICATED": "authentication",
+    "FORBIDDEN": "authorization",
+    "INTERNAL_SERVER_ERROR": "provider_internal",
+    "SERVICE_UNAVAILABLE": "provider_unavailable",
+    "TIMEOUT": "provider_timeout",
+    "RATE_LIMITED": "rate_limited",
+    "NOT_FOUND": "not_found",
+}
+
+
+def _graphql_error_classification(errors: object) -> dict[str, object]:
+    """Classify provider errors without preserving arbitrary message contents.
+
+    The returned categories identify likely investigation paths, not the
+    underlying business cause. Unknown messages remain explicitly unknown.
+    """
+    if not isinstance(errors, list) or not errors:
+        return {}
+    categories: set[str] = set()
+    roots: set[str] = set()
+    for item in errors:
+        if not isinstance(item, dict):
+            categories.add("unclassified")
+            continue
+        message = item.get("message")
+        extension = item.get("extensions")
+        code = extension.get("code") if isinstance(extension, dict) else None
+        category = _GRAPHQL_ERROR_CODES.get(code) if isinstance(code, str) else None
+        if category is None:
+            if message == "Graphql validation error" or (
+                isinstance(message, str)
+                and message.startswith(("Cannot query field ", "Unknown type "))
+            ):
+                category = "schema_validation"
+            elif isinstance(message, str) and message.startswith(
+                "Cannot return null for non-nullable field "
+            ):
+                category = "non_nullable_field"
+            elif isinstance(message, str) and message.startswith(
+                "No reading dates found for user"
+            ):
+                category = "readings_unavailable"
+            elif isinstance(message, str) and message.startswith(
+                "No marketprices found for segment"
+            ):
+                category = "market_prices_unavailable"
+            elif message == "request-error:request-not-supported-in-country":
+                category = "unsupported_country"
+            elif message in (
+                "user-error:auth-not-authorised",
+                "user-error:auth-required",
+                "user-error:refresh-token-invalid",
+            ):
+                category = "authentication"
+            else:
+                category = "unclassified"
+        categories.add(category)
+        path = item.get("path")
+        if (
+            isinstance(path, list)
+            and path
+            and isinstance(path[0], str)
+            and path[0] in _RESPONSE_ROOTS
+        ):
+            roots.add(path[0])
+    return {
+        "graphql_error_categories": sorted(categories),
+        "graphql_error_roots": sorted(roots),
+    }
+
+
 _SOURCES: Final[frozenset[str]] = frozenset(
     {
         "graphql_account",
@@ -167,6 +243,7 @@ def _response_metadata(response: object) -> dict[str, object]:
     result["graphql_error_count"] = (
         len(errors) if isinstance(errors, list) else (1 if errors else 0)
     )
+    result.update(_graphql_error_classification(errors))
     data = response.get("data")
     if not isinstance(data, dict):
         result["data_present"] = False
