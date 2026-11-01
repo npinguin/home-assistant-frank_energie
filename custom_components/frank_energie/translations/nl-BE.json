@@ -965,6 +965,28 @@
       },
       "finance_previous_feed_in_kwh": {
         "name": "Geïnjecteerde energie — vorige maand"
+      },
+      "finance_current_readiness": {
+        "name": "Financiële brondekking — deze maand",
+        "state": {
+          "not_published": "Geen maandgegevens",
+          "contract_unverified": "Contract niet bevestigd",
+          "electricity_missing": "Elektriciteitskosten ontbreken",
+          "gas_missing": "Gaskosten ontbreken",
+          "provider_total_missing": "Leverancierstotaal ontbreekt",
+          "provider_components_present": "Leverancierscomponenten beschikbaar"
+        }
+      },
+      "finance_previous_readiness": {
+        "name": "Financiële brondekking — vorige maand",
+        "state": {
+          "not_published": "Geen maandgegevens",
+          "contract_unverified": "Contract niet bevestigd",
+          "electricity_missing": "Elektriciteitskosten ontbreken",
+          "gas_missing": "Gaskosten ontbreken",
+          "provider_total_missing": "Leverancierstotaal ontbreekt",
+          "provider_components_present": "Leverancierscomponenten beschikbaar"
+        }
       }
     },
     "binary_sensor": {
