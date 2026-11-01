@@ -3083,14 +3083,16 @@ class FrankEnergiePriceCoordinator(FrankEnergieCoordinator):
         prices = self._static_prices_today
         electricity = getattr(prices, "electricity", None)
         gas = getattr(prices, "gas", None)
-        published_resolution = next(
+        # Both fuels can have a different valid customer resolution. Publish
+        # at the shortest source interval so neither series misses a slot.
+        published_resolution = min(
             (
                 minutes
                 for series in (electricity, gas)
-                if (minutes := getattr(series, "resolution_minutes", None)) in (15, 60)
-                and getattr(series, "all", None)
+                if getattr(series, "all", None)
+                and (minutes := getattr(series, "resolution_minutes", None)) in (15, 60)
             ),
-            15 if self.resolution == "PT15M" else 60,
+            default=15 if self.resolution == "PT15M" else 60,
         )
         if now_local.minute % published_resolution:
             return
