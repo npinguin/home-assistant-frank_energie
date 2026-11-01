@@ -193,6 +193,7 @@ def test_month_source_states_are_not_confused_by_parallel_periods_or_failures():
                 }
             }
         }
+
     trace.record(
         "graphql_account",
         "ok",
