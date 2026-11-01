@@ -231,3 +231,37 @@ def service_refresh_attributes(
             latest + timedelta(minutes=minutes)
         ).isoformat()
     return result
+
+
+
+def service_api_status(service: RefreshService, trace: object | None) -> str:
+    """Report the latest GraphQL transport outcome for this service.
+
+    A connection-level success does not mean every account data source is
+    complete, priced, published, or suitable for invoicing. Price cache
+    restores without a new request remain explicitly not_checked.
+    """
+    if trace is None or not callable(getattr(trace, "snapshot", None)):
+        return "not_checked"
+    snapshot = trace.snapshot()
+    events = snapshot.get("events") if isinstance(snapshot, dict) else None
+    if not isinstance(events, list):
+        return "not_checked"
+    sources = (
+        ("graphql_public", "graphql_account")
+        if service.key in ("prices", "gas_prices")
+        else ("graphql_account",)
+    )
+    for event in reversed(events):
+        if (
+            not isinstance(event, dict)
+            or event.get("source") not in sources
+            or event.get("operation") not in service.operations
+        ):
+            continue
+        if event.get("http_error_status") == 429:
+            return "rate_limited"
+        if event.get("outcome") == "ok":
+            return "connected"
+        return "error"
+    return "not_checked"

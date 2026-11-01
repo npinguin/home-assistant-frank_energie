@@ -607,3 +607,10 @@ are branch-only until exact-source CI is green; previous HACS releases and
 main remain immutable. Official Flemish capacity tariffs rely on P1 import
 quarter-hour peaks, grid-operator rate and 12-month rolling billing, and
 belong in RHI Energy, not the Frank supplier client.
+
+API diagnostics also gained read-only per-service `API status`
+(`not_checked`, `connected`, `error`, `rate_limited`) and
+`Last successful API response` entities, disabled by default. Both use
+the same bounded privacy-safe live request observer; cache restoration or a
+coordinator state publish is never fabricated as an API success. New device
+or provider requests are not introduced.

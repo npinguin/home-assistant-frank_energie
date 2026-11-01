@@ -14,13 +14,16 @@ from custom_components.frank_energie.button import (
 from custom_components.frank_energie.diagnostic_trace import DiagnosticTrace
 from custom_components.frank_energie.service_refresh import (
     RefreshService,
+    service_api_status,
     service_refresh_attributes,
     service_refresh_interval_minutes,
     service_refreshes,
 )
 from custom_components.frank_energie.service_refresh_sensor import (
     FrankEnergieLastApiCheckSensor,
+    FrankEnergieLastSuccessfulApiResponseSensor,
     FrankEnergieRefreshIntervalSensor,
+    FrankEnergieServiceApiStatusSensor,
 )
 
 
@@ -183,4 +186,62 @@ def test_last_api_check_is_real_source_timestamp_and_missing_is_unavailable():
     assert last.available is True
     assert last.native_value.tzinfo == UTC
     assert last.unique_id == "entry_last_api_check_costs"
+    coordinator.async_request_refresh.assert_not_called()
+
+
+
+def test_api_status_differentiates_provider_errors_from_no_request():
+    trace = DiagnosticTrace()
+    coordinator = MagicMock(update_interval=timedelta(hours=1))
+    service = RefreshService("prices", "Prices", coordinator, ("MarketPrices",))
+    assert service_api_status(service, trace) == "not_checked"
+    trace.record("graphql_public", "ok", operation="MarketPrices")
+    assert service_api_status(service, trace) == "connected"
+    trace.record("graphql_account", "graphql_errors", operation="MarketPrices")
+    assert service_api_status(service, trace) == "error"
+
+    class RateLimitedTrace:
+        def snapshot(self):
+            return {
+                "events": [
+                    {
+                        "source": "graphql_public",
+                        "operation": "MarketPrices",
+                        "outcome": "exception",
+                        "http_error_status": 429,
+                    }
+                ]
+            }
+
+    assert service_api_status(service, RateLimitedTrace()) == "rate_limited"
+    assert (
+        service_api_status(
+            RefreshService("user", "User", coordinator, ("Me",)),
+            trace,
+        )
+        == "not_checked"
+    )
+
+
+def test_api_status_and_last_successful_response_are_stable_diagnostic_entities():
+    coordinator = MagicMock(update_interval=timedelta(hours=1))
+    service = RefreshService("costs", "Costs", coordinator, ("MonthSummary",))
+    entry = SimpleNamespace(entry_id="safe")
+    trace = DiagnosticTrace()
+    status = FrankEnergieServiceApiStatusSensor(service, entry, trace)
+    last_good = FrankEnergieLastSuccessfulApiResponseSensor(service, entry, trace)
+    assert status.native_value == "not_checked"
+    assert status.available is True
+    assert last_good.native_value is None
+    assert last_good.available is False
+    assert status.unique_id == "safe_api_status_costs"
+    assert last_good.unique_id == "safe_last_successful_api_response_costs"
+
+    trace.record("graphql_account", "ok", operation="MonthSummary")
+    assert status.native_value == "connected"
+    assert last_good.available is True
+    good_time = last_good.native_value
+    trace.record("graphql_account", "graphql_errors", operation="MonthSummary")
+    assert status.native_value == "error"
+    assert last_good.native_value == good_time
     coordinator.async_request_refresh.assert_not_called()

@@ -117,7 +117,9 @@ from .statistics import lowest_window
 from .service_refresh import service_refreshes
 from .service_refresh_sensor import (
     FrankEnergieLastApiCheckSensor,
+    FrankEnergieLastSuccessfulApiResponseSensor,
     FrankEnergieRefreshIntervalSensor,
+    FrankEnergieServiceApiStatusSensor,
 )
 
 _DataT = TypeVar("_DataT")
@@ -5523,6 +5525,12 @@ async def async_setup_entry(
                 (
                     FrankEnergieRefreshIntervalSensor(service, config_entry, trace),
                     FrankEnergieLastApiCheckSensor(service, config_entry, trace),
+                    FrankEnergieServiceApiStatusSensor(
+                        service, config_entry, trace
+                    ),
+                    FrankEnergieLastSuccessfulApiResponseSensor(
+                        service, config_entry, trace
+                    ),
                 )
             )
         refresh_entities.append(

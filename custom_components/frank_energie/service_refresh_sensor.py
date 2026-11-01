@@ -17,6 +17,7 @@ from .const import API_CONF_URL, COMPONENT_TITLE, DOMAIN, SERVICE_NAME_PRICES, V
 from .helpers import device_translation_key
 from .service_refresh import (
     RefreshService,
+    service_api_status,
     service_refresh_attributes,
     service_refresh_interval_minutes,
 )
@@ -98,3 +99,53 @@ class FrankEnergieLastApiCheckSensor(FrankEnergieRefreshIntervalSensor):
     def available(self) -> bool:
         """A missing provider observation must not become a fake timestamp."""
         return self.native_value is not None
+
+
+
+class FrankEnergieServiceApiStatusSensor(FrankEnergieRefreshIntervalSensor):
+    """Diagnostic status of the latest actual GraphQL request for a service."""
+
+    _attr_name = "API status"
+    _attr_icon = "mdi:cloud-check-outline"
+    _attr_device_class = SensorDeviceClass.ENUM
+    _attr_options = ["connected", "error", "rate_limited", "not_checked"]
+    _attr_native_unit_of_measurement = None
+    _attr_entity_registry_enabled_default = False
+
+    def __init__(
+        self, service: RefreshService, entry: ConfigEntry, trace: object | None
+    ) -> None:
+        super().__init__(service, entry, trace)
+        self._attr_unique_id = f"{entry.entry_id}_api_status_{service.key}"
+
+    @property
+    def native_value(self) -> str:
+        return service_api_status(self._service, self._trace)
+
+    @property
+    def available(self) -> bool:
+        """Not checked since restart is information, not an API failure."""
+        return True
+
+
+class FrankEnergieLastSuccessfulApiResponseSensor(FrankEnergieLastApiCheckSensor):
+    """Time of last real successful GraphQL response within the retained trace."""
+
+    _attr_name = "Last successful API response"
+    _attr_icon = "mdi:cloud-check"
+    _attr_entity_registry_enabled_default = False
+
+    def __init__(
+        self, service: RefreshService, entry: ConfigEntry, trace: object | None
+    ) -> None:
+        super().__init__(service, entry, trace)
+        self._attr_unique_id = (
+            f"{entry.entry_id}_last_successful_api_response_{service.key}"
+        )
+
+    @property
+    def native_value(self) -> datetime | None:
+        observed = service_refresh_attributes(self._service, self._trace).get(
+            "last_successful_api_response_utc"
+        )
+        return datetime.fromisoformat(observed) if isinstance(observed, str) else None
