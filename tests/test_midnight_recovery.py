@@ -10,7 +10,6 @@ import pytest
 from custom_components.frank_energie import FrankEnergieComponent
 from custom_components.frank_energie.auth_lifecycle import attach_token_persistence
 from custom_components.frank_energie.coordinator import (
-    FrankEnergieCoordinator,
     FrankEnergieSettingsCoordinator,
 )
 from custom_components.frank_energie.diagnostic_trace import DiagnosticTrace
@@ -33,7 +32,6 @@ async def test_automatic_token_renewal_persisted_once_without_new_api_calls() ->
     first = await api.renew_token()
     assert first.authToken == "new"
     assert api.renew_token is not None
-    api.renew_token.__closure__
     hass.config_entries.async_update_entry.assert_called_once_with(
         entry,
         data={
