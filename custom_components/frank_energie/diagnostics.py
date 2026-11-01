@@ -26,6 +26,7 @@ from homeassistant.helpers import entity_registry as er
 
 from . import FrankEnergieEntryData
 from .finance import finance_evidence
+from .service_refresh import service_refreshes, service_refresh_attributes
 from .const import (
     SERVICE_NAME_COSTS,
     SERVICE_NAME_ELEC_PRICES,
@@ -785,6 +786,18 @@ async def async_get_config_entry_diagnostics(
             "statistics": _bounded_coordinator_evidence(
                 getattr(runtime_data, "statistics_coordinator", None)
             ),
+            # The same service-device timing metadata shown on HA entities.
+            # This never exposes customer amounts or a false exact timer.
+            "refresh_schedule": {
+                service.key: {
+                    "device_group": service.device_name,
+                    **service_refresh_attributes(
+                        service,
+                        getattr(coordinator, "_diagnostic_trace", None),
+                    ),
+                }
+                for service in service_refreshes(runtime_data)
+            },
             "price_coverage": _safe_price_coverage(coordinator.data),
             "gas_delivery_pipeline": _safe_gas_delivery_pipeline(
                 hass,
