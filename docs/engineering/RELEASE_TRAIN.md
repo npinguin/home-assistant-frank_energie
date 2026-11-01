@@ -289,13 +289,17 @@ Branch work on PR #18 (not installed in HA yet):
 - Strings, English and Dutch translations have been added for the new
   total/cutoff sensors, retaining the existing service device and entity IDs.
 
-**Important billing-model distinction:** Frank Energie Belgium explains that
-consumption of month M is adjusted on the bill for M+2; export data becomes
-available only after settlement. Therefore invoice `TotalAmount` for a
-calendar month must **not** be compared directly against MonthInsights'
-consumption month as if they had the same period or represented only usage.
-Official reference:
-https://www.frankenergie.be/nl/export-factuurdata
+**Important billing-model distinction:** a real Belgian Frank Energie
+statement (checked privately, not copied into this public repository) confirms
+that one invoice may combine a previous consumption month's settlement with
+an advance for a later month. For example, an October-dated statement may
+settle September consumption while charging a November advance. There is no
+universal M+2 consumption settlement rule to assume. Invoice `TotalAmount`
+is a **payment/settlement balance**, not a period's all-in energy cost.
+Electricity and gas actual usage costs, fixed charges, feed-in, taxes,
+capacity charges and net fees must be checked against the relevant detailed
+settlement lines for the same consumption period. Do not store or reproduce
+private invoice identifiers, locations, account numbers or meter identifiers.
 
 ### Still required to accept a reliable financial overview
 
@@ -310,8 +314,8 @@ https://www.frankenergie.be/nl/export-factuurdata
 3. Require source cutoff comparison: `matched_within_5_cents` (when dates
    coincide), or resolve `provider_totals_disagree`; dates that differ mean
    comparison is deferred. Check the freshness of the gas meter specifically.
-4. Compare the later M+2 **settlement** and available Frank Energie invoice
-   export with the actual consumption-month totals. Verify which Belgian
+4. Compare the available period-specific **settlement lines** (not the
+   invoice payment total) with the actual consumption-month totals. Verify which Belgian
    network, capacity, fixed, levy and VAT components are included. A normal
    installment payment is not proof of consumption-month cost. Do not label
    forecast or vendor month-insight totals as `invoiced` until reconciled.
