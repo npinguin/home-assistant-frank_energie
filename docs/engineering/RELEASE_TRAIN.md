@@ -447,6 +447,10 @@ target Home Assistant instance; do not infer a new published version.
   coordinator `update_interval` in **minutes**. This can change dynamically
   (especially during tomorrow-price publication). A missing interval reports
   unavailable; it is not interpreted as a zero-minute timer.
+- A separate diagnostic **Last API check** timestamp sensor per service
+  shows only an actual observed provider request, not a Home Assistant entity
+  update. If there is no matching request in the bounded trace since restart,
+  it remains unavailable rather than inventing a timestamp.
 - Both the button and interval sensor expose **last API request**,
   **last successful API response**, **latest API outcome** and **next estimated
   refresh** as privacy-safe attributes. The estimate is explicit: internal
