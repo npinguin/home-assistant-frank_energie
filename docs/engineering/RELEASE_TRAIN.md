@@ -635,3 +635,14 @@ belong to HA Energy Basic / RHI Energy. The existing TEST market-hour entities
 are frozen compatibility-only, not a precedent to build an optimizer in the
 supplier integration. This documentation-only change does **not** alter
 versioned runtime code or republish any immutable release.
+
+
+## 2026-11-01 — HACS TEST candidate 2026.11.1.7: consumer provenance handoff
+
+- Follow-up is on **the same Draft PR #18**, preserving all earlier immutable release tags and existing HA entity IDs.
+- Existing current electricity/gas price entities now supply `selected_price_origin`, `selected_price_segment`, `customer_billing_rate_verified=false`, and `cost_scope`; read-only Basic consumers can detect a public or cached price rather than assuming it is a Belgian MODEL customer rate.
+- Price source provenance is tracked by segment and physical local day. Full public fallback or incomplete customer coverage stays eligible for refresh at the existing coordinator cadence; restored cache is not promoted to a fresh source response.
+- Regression tests cover physical local-day coverage, mixed customer/public replies, customer recovery after fallback, cache-only, inherited base-coordinator behavior, HA entity attributes and existing gas cache tests.
+- Handoff to HA Energy Basic is specified in `docs/engineering/HA_ENERGY_BASIC_SOURCE_CONTRACT.md`. **No Basic package was modified in this Frank repository** and no second GraphQL client was introduced.
+- Target BE HA v2026.11.1.6 diagnostics observed 24h electricity and gas price coverage but lacked a post-cache live customer-price request. November MonthInsights was a provider GraphQL error; October was explicitly gasExcluded; yesterday gas usage absent. **Do not claim these supplier facts fixed by the new entity attributes.**
+- Promotion path: qualified exact-head test candidate ZIP using the existing version-neutral publisher, then target-HA install, source refresh, entity/Recorder history, HACS rollback, account-source and period invoice checks. PR remains Draft; stable blocked by live evidence and upstream finance source issue #11.
