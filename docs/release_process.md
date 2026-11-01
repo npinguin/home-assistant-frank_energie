@@ -358,3 +358,20 @@ Pages CI. The Python test, Ruff, HACS and Hassfest validation remain independent
 The shared issue/PR title labeler runs on both issue and PR events. File-path and
 size labeling are **PR-only** and must never run on issue events or on closed PRs.
 This avoids the API failure tracked in issue #10 without removing issue triage.
+
+## One qualified HACS test release train (fork)
+
+The active Belgian fork uses one consolidated Draft PR #18 and one
+version-neutral publisher, `.github/workflows/publish-qualified-hacs-test.yml`.
+A normal code change does **not** publish a release. To request a new
+controlled pre-release, update `docs/candidates/TEST_RELEASE_CANDIDATE.json`
+with a unique version and maintain matching manifest/const/pyproject and
+`docs/candidates/<version>.md`. All exact-head PR CI checks, HACS and
+Hassfest must pass; an existing tag/release can never be replaced.
+
+The publisher produces a deterministic HACS ZIP and checksum from the
+exact validated source SHA. This is a **TEST-only** gate; stable promotion
+requires separate real Home Assistant config-entry, device/entity/Recorder,
+finance-source and rollback acceptance recorded in the consolidated PR.
+Earlier version-specific publishers have been retired from the active
+branch; their immutable historical tags and workflows remain audit evidence.

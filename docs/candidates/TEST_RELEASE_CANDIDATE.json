@@ -1,0 +1,6 @@
+{
+  "version": "2026.11.1.2",
+  "channel": "hacs-test",
+  "acceptance": "pre-release-only",
+  "source_branch": "fix/be-price-provenance-truth"
+}

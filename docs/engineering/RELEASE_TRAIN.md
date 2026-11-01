@@ -327,3 +327,36 @@ private invoice identifiers, locations, account numbers or meter identifiers.
 but the account's raw MonthInsights fields, source total agreement, meter
 freshness and Belgian M+2 invoice reconciliation are not yet proven. Finance
 remains opt-in; the installed version and existing releases are untouched.
+
+## 2026-11-01 — current-day runtime gap / controlled HACS TEST 2026.11.1.2
+
+Re-reviewed the **actual latest installed HA 2026.10.4** diagnostic export for
+HACS `2026.11.1.1` at approximately 00:21 Europe/Brussels on 1 November.
+The selected BE MODEL site has both subscriptions enabled; 24 customer
+electricity hours and **only six gas price hours** for 2026-11-01. Gas
+`last_meter_reading_reported=false` is absent contract metadata, not evidence
+of a zero meter reading. Finance remains opt-in OFF, and HA states/Recorder
+are not evidenced in that export. Earlier 2026.10.31.2 diagnostics had
+incorrect false subscription flags and empty contract segments, now corrected.
+
+A source-code/root-cause review identified a second coverage bug after the
+already patched tomorrow cache: today's price fetch ran once per local day
+regardless of subscribed gas gaps. This would freeze the six-hour gas source
+until next midnight. The single PR #18 now retries **incomplete today** at
+the existing cadence, preserves the better previous current-day segment
+on a shorter API response, and avoids invalidating hourly MODEL customer
+data simply because the public query preference is PT15M. Regression tests
+use real timestamped PriceData on selected-site and DST-aware paths.
+
+CI governance is no longer version-specific: obsolete
+`publish-integrated-hacs-test.yml` and
+`publish-graphql-hacs-test.yml` were removed from the active branch.
+`publish-qualified-hacs-test.yml` consumes
+`docs/candidates/TEST_RELEASE_CANDIDATE.json` and requires all central
+exact-commit CI checks plus HACS/Hassfest before an immutable TEST tag.
+It does not merge `main`, alter earlier tags, or authorize a stable release.
+See `docs/candidates/2026.11.1.2.md` for the exact live HA acceptance evidence.
+
+**Release promotion remains BLOCKED by real HA/Recorder, source finance
+reconciliation, and HACS rollback evidence.** Do not interpret a successful
+synthetic test or published test ZIP as stable acceptance.
