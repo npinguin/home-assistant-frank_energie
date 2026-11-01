@@ -170,9 +170,10 @@ def test_raw_source_zero_is_accepted_only_if_explicitly_present():
         source_states={"electricityDifference.actualCosts": "zero"},
     )
     assert finance_reading(verified, "electricity_costs") == (0.0, "available")
-    assert finance_attributes(verified, "electricity_costs")[
-        "raw_field_presence_verified"
-    ] is True
+    assert (
+        finance_attributes(verified, "electricity_costs")["raw_field_presence_verified"]
+        is True
+    )
 
 
 @pytest.mark.parametrize("state", ["missing", "null"])
@@ -264,20 +265,26 @@ def test_month_summary_total_reconciles_only_with_same_meter_cutoff():
     assert finance_source_reconciliation(snapshot, matching) == (
         "matched_within_5_cents"
     )
-    assert finance_source_reconciliation(
-        snapshot,
-        SimpleNamespace(
-            actualCostsUntilLastMeterReadingDate=61.3,
-            lastMeterReadingDate="2026-10-25",
-        ),
-    ) == "provider_totals_disagree"
-    assert finance_source_reconciliation(
-        snapshot,
-        SimpleNamespace(
-            actualCostsUntilLastMeterReadingDate=61.2,
-            lastMeterReadingDate="2026-10-24",
-        ),
-    ) == "source_cutoff_mismatch"
+    assert (
+        finance_source_reconciliation(
+            snapshot,
+            SimpleNamespace(
+                actualCostsUntilLastMeterReadingDate=61.3,
+                lastMeterReadingDate="2026-10-25",
+            ),
+        )
+        == "provider_totals_disagree"
+    )
+    assert (
+        finance_source_reconciliation(
+            snapshot,
+            SimpleNamespace(
+                actualCostsUntilLastMeterReadingDate=61.2,
+                lastMeterReadingDate="2026-10-24",
+            ),
+        )
+        == "source_cutoff_mismatch"
+    )
     assert finance_source_reconciliation(None, matching) == "not_comparable"
 
 
