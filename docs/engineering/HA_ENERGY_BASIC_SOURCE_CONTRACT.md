@@ -22,6 +22,8 @@ The existing current electricity/gas price sensors have these additional attribu
 - `customer_billing_rate_verified: false`: never mistake a provider price slot or public fallback for a reconciled Belgian MODEL invoice tariff.
 - `cost_scope: provider_price_not_reconciled_invoice`.
 
+**Belgian variable MODEL caveat:** Frank's Belgian contract documentation says variable contracts settle on a periodically/monthly established price rather than the observed spot price of the individual charging hour. The inspected BE account reports `MODEL`/variable (electricity SMR3, gas SMR1). **Do not infer arbitrage savings from spot-price ordering for this account.** Smart-service incentives, where applicable, are a separate supplier-reported bonus and must not be manufactured from electricity market prices. Confirm the actual contract formula before calculating a household energy bill.
+
 **Consumer behavior:** Use provider prices only as **indicative** until provider-specific contract provenance is independently accepted. A market component may be displayed as a market signal; do not optimize financial cost using a public fallback as if it were a customer invoice rate. Treat `unknown`, `unavailable`, partial/old periods and missing source fields as missing, never zero.
 
 ## Ownership and source precedence
