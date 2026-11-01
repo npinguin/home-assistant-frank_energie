@@ -2,7 +2,7 @@
 
 from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -117,6 +117,7 @@ def test_no_api_evidence_never_invents_last_update_or_future_deadline():
 async def test_costs_button_refreshes_statistics_only():
     price = MagicMock()
     statistics = MagicMock()
+    statistics.async_request_refresh = AsyncMock()
     entry = SimpleNamespace(entry_id="site-one")
     costs = RefreshService("costs", "Costs", statistics, ("MonthInsights",))
     button = FrankEnergieRefreshButton(
