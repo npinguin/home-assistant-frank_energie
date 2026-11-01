@@ -12,6 +12,10 @@ permissions:
 
 jobs:
   release_zip_file:
+    # Qualified prereleases already ship an exact-commit ZIP through their
+    # validated publisher. Never upload a second, different ZIP for the same
+    # prerelease tag (stable upstream release packaging remains unchanged).
+    if: ${{ !github.event.release.prerelease }}
     permissions:
       contents: write
     name: Prepare release asset
