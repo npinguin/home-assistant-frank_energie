@@ -657,6 +657,8 @@ async def async_get_config_entry_diagnostics(
 
     runtime_data: FrankEnergieEntryData = entry.runtime_data
     coordinator = runtime_data.coordinator
+    stats = getattr(getattr(runtime_data, "statistics_coordinator", None), "data", None)
+    finance_stats = stats if isinstance(stats, dict) else {}
 
     diagnostics: dict[str, object] = {
         "entry": {
@@ -738,15 +740,9 @@ async def async_get_config_entry_diagnostics(
                 )
             ),
             "finance_audit": finance_evidence(
-                (
-                    getattr(runtime_data.statistics_coordinator, "data", {}) or {}
-                ).get("month_insights_current"),
-                (
-                    getattr(runtime_data.statistics_coordinator, "data", {}) or {}
-                ).get("month_insights_previous"),
-                (
-                    getattr(runtime_data.statistics_coordinator, "data", {}) or {}
-                ).get("month_summary"),
+                finance_stats.get("month_insights_current"),
+                finance_stats.get("month_insights_previous"),
+                finance_stats.get("month_summary"),
             ),
             "provider_data_freshness": _safe_provider_data_freshness(
                 getattr(
