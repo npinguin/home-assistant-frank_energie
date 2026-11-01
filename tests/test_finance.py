@@ -231,3 +231,51 @@ def test_missing_snapshot_quality_is_explained():
 def test_unknown_finance_metric_rejected():
     with pytest.raises(ValueError):
         finance_reading(_snapshot(), "invented_capacity_tariff")
+
+
+def test_month_summary_total_reconciles_only_with_same_meter_cutoff():
+    from custom_components.frank_energie.finance import finance_source_reconciliation
+
+    snapshot = _snapshot()
+    matching = SimpleNamespace(
+        actualCostsUntilLastMeterReadingDate=61.2,
+        lastMeterReadingDate="2026-10-25",
+    )
+    assert finance_source_reconciliation(snapshot, matching) == (
+        "matched_within_5_cents"
+    )
+    assert finance_source_reconciliation(
+        snapshot,
+        SimpleNamespace(
+            actualCostsUntilLastMeterReadingDate=61.3,
+            lastMeterReadingDate="2026-10-25",
+        ),
+    ) == "provider_totals_disagree"
+    assert finance_source_reconciliation(
+        snapshot,
+        SimpleNamespace(
+            actualCostsUntilLastMeterReadingDate=61.2,
+            lastMeterReadingDate="2026-10-24",
+        ),
+    ) == "source_cutoff_mismatch"
+    assert finance_source_reconciliation(None, matching) == "not_comparable"
+
+
+def test_month_audit_only_returns_quality_not_billing_values_or_identifiers():
+    from custom_components.frank_energie.finance import finance_evidence
+
+    snapshot = _snapshot()
+    audit = finance_evidence(
+        snapshot,
+        None,
+        SimpleNamespace(
+            actualCostsUntilLastMeterReadingDate=61.2,
+            lastMeterReadingDate="2026-10-25",
+        ),
+    )
+    assert audit["source_total_reconciliation"] == "matched_within_5_cents"
+    assert audit["invoice_reconciliation_verified"] is False
+    assert audit["current"]["metric_quality"]["gas_costs"] == "available"
+    assert audit["previous"]["metric_quality"]["gas_costs"] == "not_published"
+    assert "61.2" not in str(audit)
+    assert "37.5" not in str(audit)
