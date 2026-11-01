@@ -1,6 +1,6 @@
 """Integration-facing monthly finance polling and entity lifecycle guards."""
 
-from datetime import datetime, timedelta, timedelta
+from datetime import datetime, timedelta
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, call
 from zoneinfo import ZoneInfo
