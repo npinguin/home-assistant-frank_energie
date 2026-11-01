@@ -605,6 +605,7 @@ def test_provider_data_freshness_separates_api_objects_from_meter_data() -> None
     assert result["month_summary"] == {
         "present": True,
         "last_meter_reading_age_days": 7,
+        "last_meter_reading_in_current_local_month": False,
     }
     assert result["usage"]["segments"]["electricity"] == {
         "present": True,
@@ -634,6 +635,7 @@ def test_provider_data_freshness_handles_missing_dates_without_guessing() -> Non
         local_today=date(2026, 11, 1),
     )
     assert result["month_summary"]["last_meter_reading_age_days"] is None
+    assert result["month_summary"]["last_meter_reading_in_current_local_month"] is None
     assert result["invoices"]["invoice_count"] == 0
     assert result["invoices"]["latest_invoice_start_age_days"] is None
     assert result["usage"]["segments"]["gas"]["present"] is False
@@ -879,3 +881,12 @@ def test_gas_entity_pipeline_checks_real_states_and_correct_service_devices(
     )
     assert "gas_price_private" not in str(result)
     assert "some-key" not in str(result)
+
+
+def test_provider_period_freshness_uses_local_day_for_utc_meter_timestamp() -> None:
+    """Privacy-safe period diagnostic follows calendar day in Belgium."""
+    result = _safe_provider_data_freshness(
+        {"month_summary": SimpleNamespace(lastMeterReadingDate="2026-10-31T23:30:00Z")},
+        local_today=date(2026, 11, 1),
+    )
+    assert result["month_summary"]["last_meter_reading_in_current_local_month"] is True
