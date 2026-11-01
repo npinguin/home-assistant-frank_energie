@@ -301,6 +301,16 @@ async def test_aligned_refresh_covers_whole_price_release_window(
     price_coordinator.async_request_refresh = AsyncMock()
     price_coordinator.async_update_listeners = MagicMock()
     price_coordinator.resolution = "PT60M"
+    price_coordinator._should_skip_api_calls.return_value = False
+    price_coordinator.last_update_success = True
+    price_coordinator.last_fetch_today = datetime(
+        2026, 7, 21, 10, 0, tzinfo=zoneinfo.ZoneInfo("UTC")
+    )
+    price_coordinator.data = {"electricity": MagicMock(current=0.25), "gas": None}
+    price_coordinator._today_cache_covers_selected_site.return_value = True
+    price_coordinator.settings_coordinator.api.is_authenticated = False
+    entry.runtime_data = MagicMock()
+    entry.runtime_data.statistics_coordinator.api.is_authenticated = False
 
     captured_callback = None
 
