@@ -479,3 +479,26 @@ MonthInsights field-level truth, actual entity states, Recorder history,
 reload/rollback, and period-specific invoice component reconciliation. Monthly
 finance stays opt-in and unaccepted. This PR stays **Draft**, `main` remains
 untouched, and prior TEST tags remain immutable.
+
+
+## HACS TEST 2026.11.1.4 — release candidate
+
+Release candidate `2026.11.1.4` includes the source-only changes
+since installed `2026.11.1.3`: price cache and recovery truth,
+local month cutoff correctness, per-service refresh controls,
+live polling intervals and real observed last API checks.
+
+- The canonical release marker, manifest, `const.VERSION` and Poetry
+  metadata must match the new version and the publication workflow must
+  validate the **same exact branch SHA** as central PR CI.
+- A successful publisher makes an immutable **HACS TEST prerelease** with
+  the ZIP/checksum assets and **does not** merge the draft PR or promote stable.
+- The full acceptance/rollback checklist and known limitations are in
+  `docs/candidates/2026.11.1.4.md`.
+- Runtime acceptance is still required for the actual Belgian site:
+  October/November MonthInsights source quality, missing gas history,
+  device entity IDs and Recorder, refresh timer visibility, prices after
+  maintenance, manual/automatic refresh and HACS rollback.
+- The TEST release is not evidence of invoice reconciliation or stable
+  Belgian gas billing. Do not close the existing financial blockers merely
+  because a new candidate is installable.
