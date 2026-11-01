@@ -1102,6 +1102,12 @@
       "finance_current_feed_in_kwh": {
         "name": "Feed-in energy — current month"
       },
+      "finance_current_actual_total": {
+        "name": "Actual total costs through latest meter reading — current month"
+      },
+      "finance_current_expected_to_reading": {
+        "name": "Expected costs through latest meter reading — current month"
+      },
       "finance_current_expected_total": {
         "name": "Expected total costs — current month"
       },
@@ -1116,6 +1122,12 @@
       },
       "finance_current_expected_feed_in": {
         "name": "Expected feed-in balance — current month"
+      },
+      "finance_previous_actual_total": {
+        "name": "Actual total costs through latest meter reading — previous month"
+      },
+      "finance_previous_expected_to_reading": {
+        "name": "Expected costs through latest meter reading — previous month"
       },
       "finance_previous_electricity_costs": {
         "name": "Electricity costs — previous month"
