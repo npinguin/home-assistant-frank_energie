@@ -2848,6 +2848,7 @@ class FrankEnergiePriceCoordinator(FrankEnergieCoordinator):
         self.settings_coordinator = settings_coordinator
         self.update_interval = None
         self.store = price_cache_store(hass, config_entry.entry_id)
+
     def _selected_customer_source_needs_retry(self, day: date) -> bool:
         """A complete public fallback is not a complete customer tariff."""
         if not self.api.is_authenticated:
