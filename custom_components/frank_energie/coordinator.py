@@ -3015,6 +3015,9 @@ class FrankEnergiePriceCoordinator(FrankEnergieCoordinator):
         )
         cached_data_loaded = await self._async_setup()
         now_utc = dt_util.utcnow()
+        # A fresh disk cache still needs a live HA polling schedule.
+        # Previously this return path left update_interval at None forever.
+        self._adjust_update_interval(now_utc)
 
         if not cached_data_loaded or not self._is_cache_fresh(now_utc):
             _LOGGER.debug("No fresh cache found, performing initial API fetch")
@@ -3065,6 +3068,35 @@ class FrankEnergiePriceCoordinator(FrankEnergieCoordinator):
             new_interval,
         )
         self.update_interval = new_interval
+
+    def publish_price_slot(self, now_utc: datetime) -> None:
+        """Advance local tariff state and cheapest-price events without API I/O.
+
+        The aligned clock owns business transitions, while this coordinator's
+        update_interval is the only routine price-provider poller.
+        """
+        now_local = now_utc.astimezone(ZoneInfo(TIMEZONE_AMSTERDAM))
+        prices = self._static_prices_today
+        electricity = getattr(prices, "electricity", None)
+        gas = getattr(prices, "gas", None)
+        published_resolution = next(
+            (
+                minutes
+                for series in (electricity, gas)
+                if (minutes := getattr(series, "resolution_minutes", None))
+                in (15, 60)
+                and getattr(series, "all", None)
+            ),
+            15 if self.resolution == "PT15M" else 60,
+        )
+        if now_local.minute % published_resolution:
+            return
+
+        today = now_local.date()
+        self._maybe_fire_lowest_price_event(prices, today, now_utc)
+        self._maybe_fire_lowest_4p_event(prices, today, now_utc)
+        self._maybe_fire_lowest_16p_event(prices, today, now_utc)
+        self.async_update_listeners()
 
     def _carry_forward_previous_day(
         self, new_prices: MarketPrices | None, today: date
@@ -3195,8 +3227,10 @@ class FrankEnergiePriceCoordinator(FrankEnergieCoordinator):
                             self._static_prices_today, current_prices, today
                         )
                         self._update_today_prices(prices_today)
-                    self.last_fetch_today = now_utc
-                    self._today_prices_logged = True
+                        # Timestamp only an actual, usable provider fetch.
+                        # Falling back to an old cache must remain retryable.
+                        self.last_fetch_today = now_utc
+                        self._today_prices_logged = True
                 except Exception as err:
                     await self._handle_fetch_exceptions(err)
                     if (
