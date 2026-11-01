@@ -113,6 +113,8 @@ from .helpers import (
     service_device_info,
 )
 from .statistics import lowest_window
+from .service_refresh import service_refreshes
+from .service_refresh_sensor import FrankEnergieRefreshIntervalSensor
 
 _DataT = TypeVar("_DataT")
 _LOGGER = logging.getLogger(__name__)
@@ -5504,6 +5506,14 @@ async def async_setup_entry(
                                     pv_coordinator, system.id, group.id, group.position
                                 )
                             )
+
+    # Runtime polling cadence is a diagnostic entity on each logical service.
+    # It shares the existing coordinator and never makes an additional request.
+    trace = getattr(price_coordinator, "_diagnostic_trace", None)
+    entities.extend(
+        FrankEnergieRefreshIntervalSensor(service, config_entry, trace)
+        for service in service_refreshes(runtime_data)
+    )
 
     try:
         async_add_entities(entities, update_before_add=True)
