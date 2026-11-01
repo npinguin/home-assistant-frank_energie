@@ -330,3 +330,62 @@ def test_contracted_gas_exclusion_prevents_partial_month_totals():
         gas_expected=False,
     )
     assert finance_reading(electricity_only, "actual_total") == (61.2, "available")
+
+
+def test_full_energy_total_requires_proven_electricity_and_gas_components():
+    original = _snapshot()
+    source = {
+        "actualCostsUntilLastMeterReading": "positive",
+        "expectedCosts": "positive",
+        "electricityDifference.actualCosts": "positive",
+        "electricityDifference.actualUsage": "positive",
+        "gasDifference.actualCosts": "positive",
+        "gasDifference.actualUsage": "positive",
+        "expectedCostsElectricity": "positive",
+        "expectedCostsGas": "positive",
+    }
+
+    def scoped(states):
+        return MonthlyFinanceSnapshot(
+            month=original.month,
+            insights=original.insights,
+            retrieved_at=original.retrieved_at,
+            source_states=states,
+            electricity_expected=True,
+            gas_expected=True,
+        )
+
+    assert finance_reading(scoped(source), "actual_total") == (61.2, "available")
+    assert finance_reading(scoped(source), "expected_total") == (80.0, "available")
+    without_gas = {
+        key: value for key, value in source.items() if not key.startswith("gas")
+    }
+    assert finance_reading(scoped(without_gas), "actual_total") == (
+        None,
+        "gas_component_missing",
+    )
+    assert finance_reading(scoped(without_gas), "expected_total") == (
+        None,
+        "gas_component_missing",
+    )
+    assert finance_reading(scoped(None), "actual_total") == (
+        None,
+        "electricity_component_unverified",
+    )
+
+
+def test_electricity_only_site_does_not_require_uncontracted_gas_breakdown():
+    original = _snapshot()
+    snapshot = MonthlyFinanceSnapshot(
+        month=original.month,
+        insights=original.insights,
+        retrieved_at=original.retrieved_at,
+        source_states={
+            "actualCostsUntilLastMeterReading": "positive",
+            "electricityDifference.actualCosts": "positive",
+            "electricityDifference.actualUsage": "positive",
+        },
+        electricity_expected=True,
+        gas_expected=False,
+    )
+    assert finance_reading(snapshot, "actual_total") == (61.2, "available")
