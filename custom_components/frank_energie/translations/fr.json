@@ -1102,6 +1102,12 @@
       "finance_current_feed_in_kwh": {
         "name": "Énergie injectée — mois en cours"
       },
+      "finance_current_actual_total": {
+        "name": "Coût total réel jusqu'au dernier relevé — mois en cours"
+      },
+      "finance_current_expected_to_reading": {
+        "name": "Coût prévu jusqu'au dernier relevé — mois en cours"
+      },
       "finance_current_expected_total": {
         "name": "Coût total prévu — mois en cours"
       },
@@ -1116,6 +1122,12 @@
       },
       "finance_current_expected_feed_in": {
         "name": "Solde injection prévu — mois en cours"
+      },
+      "finance_previous_actual_total": {
+        "name": "Coût total réel jusqu'au dernier relevé — mois précédent"
+      },
+      "finance_previous_expected_to_reading": {
+        "name": "Coût prévu jusqu'au dernier relevé — mois précédent"
       },
       "finance_previous_electricity_costs": {
         "name": "Coûts électricité — mois précédent"
