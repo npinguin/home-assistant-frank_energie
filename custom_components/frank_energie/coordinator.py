@@ -550,6 +550,9 @@ class FrankEnergieCoordinator(DataUpdateCoordinator[FrankEnergieData]):
         self._last_update_success = False
         self.user_electricity_enabled = False
         self.user_gas_enabled = False
+        # All coordinators inherit price selection for upstream compatibility.
+        # Only a live provider reply can establish process-local provenance.
+        self._price_sources_by_day: dict[str, dict[str, str]] = {}
 
         self.cached_prices: FrankEnergieData | None = None
         self.cached_prices_today: PricesTodayCache | None = None
@@ -571,6 +574,48 @@ class FrankEnergieCoordinator(DataUpdateCoordinator[FrankEnergieData]):
         # None = not yet checked; True/False = confirmed this session.
         # Reset to None daily so PV ownership is re-probed in case of new installation.
         self._has_pv_systems: bool | None = None
+
+    def _remember_price_sources(
+        self,
+        day: date,
+        selected: MarketPrices | None,
+        *,
+        customer_electricity: bool = False,
+        customer_gas: bool = False,
+        public_fresh: bool = False,
+    ) -> None:
+        """Track selected segments separately without persisting false source proof."""
+        sources: dict[str, str] = {}
+        for segment, is_customer in (
+            ("electricity", customer_electricity),
+            ("gas", customer_gas),
+        ):
+            series = getattr(selected, segment, None)
+            if series is None or covered_seconds_in_local_day(series, day) <= 0:
+                sources[segment] = "unavailable"
+                continue
+            origin = (
+                "customer"
+                if is_customer
+                else "public"
+                if public_fresh
+                else "cached_unverified"
+            )
+            sources[segment] = (
+                origin if covers_local_day(series, day) else f"{origin}_partial"
+            )
+        self._price_sources_by_day[day.isoformat()] = sources
+        # Keep only the latest three local dates, not an unbounded history.
+        for previous in sorted(self._price_sources_by_day)[:-3]:
+            self._price_sources_by_day.pop(previous, None)
+
+    def price_source_for(self, segment: str, day: date) -> str:
+        """A public HA consumer can distinguish source evidence from a cache."""
+        if segment not in ("electricity", "gas"):
+            return "unverified"
+        return self._price_sources_by_day.get(day.isoformat(), {}).get(
+            segment, "cached_or_unverified"
+        )
 
     def _record_price_fetch(
         self,
@@ -2803,52 +2848,6 @@ class FrankEnergiePriceCoordinator(FrankEnergieCoordinator):
         self.settings_coordinator = settings_coordinator
         self.update_interval = None
         self.store = price_cache_store(hass, config_entry.entry_id)
-        # Process-local provenance: a restored disk cache cannot certify
-        # a customer tariff or a fresh public response after HA restart.
-        self._price_sources_by_day: dict[str, dict[str, str]] = {}
-
-    def _remember_price_sources(
-        self,
-        day: date,
-        selected: MarketPrices | None,
-        *,
-        customer_electricity: bool = False,
-        customer_gas: bool = False,
-        public_fresh: bool = False,
-    ) -> None:
-        """Track selected segments separately without persisting false source proof."""
-        sources: dict[str, str] = {}
-        for segment, is_customer in (
-            ("electricity", customer_electricity),
-            ("gas", customer_gas),
-        ):
-            series = getattr(selected, segment, None)
-            if series is None or covered_seconds_in_local_day(series, day) <= 0:
-                sources[segment] = "unavailable"
-                continue
-            origin = (
-                "customer"
-                if is_customer
-                else "public"
-                if public_fresh
-                else "cached_unverified"
-            )
-            sources[segment] = (
-                origin if covers_local_day(series, day) else f"{origin}_partial"
-            )
-        self._price_sources_by_day[day.isoformat()] = sources
-        # Keep only the latest three local dates, not an unbounded history.
-        for previous in sorted(self._price_sources_by_day)[:-3]:
-            self._price_sources_by_day.pop(previous, None)
-
-    def price_source_for(self, segment: str, day: date) -> str:
-        """A public HA consumer can distinguish source evidence from a cache."""
-        if segment not in ("electricity", "gas"):
-            return "unverified"
-        return self._price_sources_by_day.get(day.isoformat(), {}).get(
-            segment, "cached_or_unverified"
-        )
-
     def _selected_customer_source_needs_retry(self, day: date) -> bool:
         """A complete public fallback is not a complete customer tariff."""
         if not self.api.is_authenticated:
