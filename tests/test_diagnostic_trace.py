@@ -183,6 +183,7 @@ def test_graphql_trace_stays_bounded_and_rejects_untrusted_operation_names() -> 
 
 def test_month_source_states_are_not_confused_by_parallel_periods_or_failures():
     trace = DiagnosticTrace()
+
     def response(gas):
         return {
             "data": {
@@ -206,12 +207,13 @@ def test_month_source_states_are_not_confused_by_parallel_periods_or_failures():
         period="2026-11",
         response=response(99.0),
     )
-    assert trace.source_states_for_month("2026-10")[
-        "gasDifference.actualCosts"
-    ] == "zero"
-    assert trace.source_states_for_month("2026-11")[
-        "gasDifference.actualCosts"
-    ] == "positive"
+    assert (
+        trace.source_states_for_month("2026-10")["gasDifference.actualCosts"] == "zero"
+    )
+    assert (
+        trace.source_states_for_month("2026-11")["gasDifference.actualCosts"]
+        == "positive"
+    )
     assert trace.source_states_for_month("2026-09") is None
     assert trace.source_states_for_month("secret-customer") is None
 
