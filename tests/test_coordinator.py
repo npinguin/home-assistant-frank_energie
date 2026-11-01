@@ -2623,7 +2623,8 @@ def _selected_model_price_coordinator(
     from types import SimpleNamespace
 
     mock_frank_energie.is_authenticated = True
-    mock_config_entry.options["resolution"] = "PT15M"
+    # Empty options select the integration's PT15M default. MockConfigEntry
+    # exposes immutable mappingproxy options, as actual HA config entries do.
     settings = FrankEnergieSettingsCoordinator(
         MagicMock(), mock_config_entry, mock_frank_energie
     )
