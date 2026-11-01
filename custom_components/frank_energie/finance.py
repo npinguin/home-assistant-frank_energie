@@ -90,21 +90,20 @@ def finance_reading(
     if bounds is None:
         return None, "invalid_period"
     insights = snapshot.insights
-    meter_date = getattr(insights, "lastMeterReadingDate", None)
-    if not isinstance(meter_date, datetime) or meter_date.tzinfo is None:
-        return None, "missing_meter_date"
-
-    # Data for one month may be published on the *first day* of the next.
-    # A value read earlier than the requested period is never relabelled.
-    start, end = bounds
-    local_date = meter_date.astimezone(_AMSTERDAM).date()
-    # A forecast is tied to the period requested from the provider and can
-    # precede its first meter reading. Actual and cutoff-based values cannot.
+    # Full-month forecasts are tied to the requested period, not the
+    # last meter reading. Actual/cutoff-based values still require a
+    # plausible meter date, including a first-next-month final reading.
     forecast_metric = metric.startswith("expected_") and (
         metric != "expected_to_reading"
     )
-    if not forecast_metric and not start <= local_date <= end:
-        return None, "reading_outside_period"
+    if not forecast_metric:
+        meter_date = getattr(insights, "lastMeterReadingDate", None)
+        if not isinstance(meter_date, datetime) or meter_date.tzinfo is None:
+            return None, "missing_meter_date"
+        start, end = bounds
+        local_date = meter_date.astimezone(_AMSTERDAM).date()
+        if not start <= local_date <= end:
+            return None, "reading_outside_period"
 
     difference_name, field_name, required_unit = _FIELDS[metric]
     gas_excluded = bool(getattr(insights, "gasExcluded", False))
@@ -233,6 +232,42 @@ def finance_attributes(
     return attrs
 
 
+def finance_period_readiness(snapshot: MonthlyFinanceSnapshot | None) -> str:
+    """Classify provider actual component coverage, not full household costs."""
+    if snapshot is None:
+        return "not_published"
+    electricity = snapshot.electricity_expected
+    gas = snapshot.gas_expected
+    if electricity is None or gas is None or not (electricity or gas):
+        return "contract_unverified"
+    if electricity and finance_reading(snapshot, "electricity_costs")[0] is None:
+        return "electricity_missing"
+    if gas and finance_reading(snapshot, "gas_costs")[0] is None:
+        return "gas_missing"
+    if finance_reading(snapshot, "actual_total")[0] is None:
+        return "provider_total_missing"
+    return "provider_components_present"
+
+
+def finance_period_readiness_attributes(
+    snapshot: MonthlyFinanceSnapshot | None,
+) -> dict[str, object]:
+    """Explain component gaps without leaking money or account identifiers."""
+    attrs: dict[str, object] = {
+        "scope": "provider_monthly_components_not_all_in_household_bill",
+        "invoice_reconciled": False,
+        "quality": finance_period_readiness(snapshot),
+        "electricity_cost_quality": finance_reading(snapshot, "electricity_costs")[1],
+        "gas_cost_quality": finance_reading(snapshot, "gas_costs")[1],
+        "provider_total_quality": finance_reading(snapshot, "actual_total")[1],
+        "expected_total_quality": finance_reading(snapshot, "expected_total")[1],
+    }
+    if snapshot is not None:
+        attrs["period"] = snapshot.month
+        attrs["retrieved_at"] = snapshot.retrieved_at.isoformat()
+    return attrs
+
+
 # Invoice amounts are deliberately excluded: payment and settlement periods
 # need not match their underlying consumption calendar month.
 _AUDIT_METRICS = tuple(_FIELDS)
@@ -313,5 +348,6 @@ def finance_evidence(
                 snapshot is not None and snapshot.source_states is not None
             ),
             "metric_quality": metrics,
+            "provider_cost_readiness": finance_period_readiness(snapshot),
         }
     return result
