@@ -111,6 +111,26 @@ def test_late_meter_reading_must_not_relabel_previous_period():
     ) == (18.1, "available")
 
 
+def test_projected_month_cost_does_not_require_first_month_meter_reading():
+    snapshot = _snapshot(month="2026-11")
+    # Source query explicitly requested November, but the latest meter reading
+    # is still from October. Forecast may be valid; actual cannot be.
+    assert finance_reading(snapshot, "expected_total") == (80.0, "available")
+    assert finance_reading(snapshot, "expected_to_reading") == (
+        None,
+        "reading_outside_period",
+    )
+    assert finance_reading(snapshot, "actual_total") == (
+        None,
+        "reading_outside_period",
+    )
+
+
+def test_gas_exclusion_also_withholds_expected_gas_component():
+    snapshot = _snapshot(gas_excluded=True)
+    assert finance_reading(snapshot, "expected_gas") == (None, "gas_excluded")
+
+
 def test_pinned_api_parser_coerces_missing_fields_to_zero_and_is_withheld():
     data = {
         "data": {
