@@ -12,6 +12,10 @@ from custom_components.frank_energie.sensor import SENSOR_TYPES
 
 
 CURRENT_MONTH_KEYS = (
+    "actual_costs_until_last_meter_reading_date",
+    "expected_costs_until_last_meter_reading_date",
+    "difference_costs_until_last_meter_reading_date",
+    "difference_costs_per_day",
     "expected_costs_this_month",
     "expected_costs_per_day_this_month",
     "costs_per_day_till_now_this_month",
@@ -24,6 +28,10 @@ def _values(reading_date: object, expected: float = 252.0) -> dict:
         DATA_MONTH_SUMMARY: SimpleNamespace(
             lastMeterReadingDate=reading_date,
             expectedCosts=expected,
+            actualCostsUntilLastMeterReadingDate=expected,
+            expectedCostsUntilLastMeterReadingDate=expected,
+            differenceUntilLastMeterReadingDate=expected,
+            differenceUntilLastMeterReadingDateAvg=0.0,
             expectedCostsPerDay=8.13,
             costs_per_day_till_now=11.5,
         )
@@ -59,6 +67,10 @@ def test_current_month_summary_allows_explicit_zero() -> None:
             if sensor.key in CURRENT_MONTH_KEYS
         }
     assert actual == {
+        "actual_costs_until_last_meter_reading_date": 0.0,
+        "expected_costs_until_last_meter_reading_date": 0.0,
+        "difference_costs_until_last_meter_reading_date": 0.0,
+        "difference_costs_per_day": 0.0,
         "expected_costs_this_month": 0.0,
         "expected_costs_per_day_this_month": 8.13,
         "costs_per_day_till_now_this_month": 11.5,
