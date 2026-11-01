@@ -656,3 +656,12 @@ versioned runtime code or republish any immutable release.
 - Real v2026.11.1.7 target diagnostics established authenticated customer prices for today's gas/electricity, 24h tomorrow electricity and six gas hours, November MonthInsights GraphQL error, October gas exclusion, prior-day gas usage absent. The new classification can aid the **next** root-cause investigation, not alter provider source truth.
 - [Belgian API research matrix](BE_GRAPHQL_API_RESEARCH.md) and Basic source contract now distinguish variable MODEL monthly settlement, public spot signals, and independently payable smart-service bonuses. No dynamic arbitrage claim or fake monthly total.
 - Release only as qualified immutable HACS TEST with exact SHA checks; no stable merge, no provider API claim until user tests this release after normal hourly finance polling.
+
+
+## 2026-11-01 — source-qualified household-finance progress; permanent runbook
+
+The product goal is **monthly and historical electricity + gas + net household cost**, not just provider price and GraphQL request success. The installed v2026.11.1.8 BE MODEL source has October actual electricity/feed-in but gas excluded, November monthInsights error/null, no prior-day gas and no complete next-day gas. No all-in monthly cost or reconciled invoice is yet available; keep the stable gate blocked.
+
+On the single existing PR #18 branch we added privacy-safe monthly provider source readiness statuses (`finance_current_readiness`, `finance_previous_readiness`), preserved previous-month known-good evidence through transient provider outages only for the exact site/month, corrected full-month forecast to not require a first meter reading (actual still requires the cutoff), and withheld seven tomorrow gas day-summary sensors when source time coverage is partial (23/25h DST aware). Added regression tests and translations to the supported locales. Nothing in this branch proves actual gas has been published.
+
+**Permanent next-engineer reference**: [FINANCIAL_VISIBILITY_RUNBOOK.md](FINANCIAL_VISIBILITY_RUNBOOK.md), linked in root `AGENTS.md` and in the Basic source contract. Acceptance is blocked by verified monthly gas financial source or an explicitly labeled local Basic estimate, invoice period reconciliation, live HA entity/Recorder acceptance and exact-head checks. All test candidate releases remain immutable; changes are branch-only until a new qualified build.
