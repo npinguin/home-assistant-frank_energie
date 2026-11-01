@@ -16,7 +16,9 @@ permissions:
   actions: read
 
 concurrency:
-  group: frank-energie-qualified-hacs-test
+  # Independent exact-commit publication attempts cannot deadlock behind a
+  # stale run. Only the current reviewed branch HEAD can create its tag.
+  group: frank-energie-qualified-hacs-test-${{ github.sha }}
   cancel-in-progress: false
 
 jobs:
