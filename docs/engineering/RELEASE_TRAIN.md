@@ -433,6 +433,41 @@ target Home Assistant instance; do not infer a new published version.
   from the aligned clock, empty-source retry eligibility, real-vs-false recovery,
   rollover dates/UTC-local boundaries and explicit zero.
 
+### Service-device refresh controls (TEST candidate, not released)
+
+- Existing functional devices receive a refresh button for each present
+  source group: Prices, Gasprices (when applicable), Costs, Usage, User and
+  available Batteries, Chargers, Vehicles and Solar Systems.
+  Prices keeps its existing `refresh_prices` unique key. Battery Sessions
+  keeps its existing dedicated button.
+- Costs and Usage correctly share the Statistics coordinator; Prices and Gas
+  Prices share the price coordinator. Buttons therefore request refresh of
+  the real source rather than inventing independent provider polling.
+- A new diagnostic **Refresh interval** sensor per service shows the live
+  coordinator `update_interval` in **minutes**. This can change dynamically
+  (especially during tomorrow-price publication). A missing interval reports
+  unavailable; it is not interpreted as a zero-minute timer.
+- Both the button and interval sensor expose **last API request**,
+  **last successful API response**, **latest API outcome** and **next estimated
+  refresh** as privacy-safe attributes. The estimate is explicit: internal
+  Home Assistant scheduling, provider maintenance (00–01 UTC), optional
+  endpoint caching and manual refreshes can shift the real deadline.
+  An HTTP/GraphQL success does **not** prove complete supplier readings.
+- Price slot state changes (15/60 minute boundaries) are explicitly separate
+  from network API polling. Cached price fetch timestamps are exposed as
+  source provenance, not passed off as current API requests.
+- Service timing also appears in diagnostics under
+  `coordinator_evidence.refresh_schedule`. The diagnostic event window
+  is limited to the most recent 96 requests since restart; missing evidence
+  becomes `null`, never a fabricated timestamp.
+- Diagnostic interval sensors are registered with
+  `update_before_add=False` to avoid triggering any additional provider
+  requests just to display the timer. Tests cover dynamic intervals,
+  missing evidence, present/absent services and manual source routing.
+- This remains a **TEST branch implementation** until the exact-head CI and
+  real HA device/Recorder/reload verification pass. No stable release or
+  main-branch promotion is implied.
+
 **Remaining work:** pass exact-head Python 3.14/3.14.2 pytest, Flake8, Ruff,
 Quality Scale and Link Check. Confirm full HA/HACS/Hassfest release gates,
 new-day recovery and source coverage (both electricity and gas), authenticated
