@@ -5507,16 +5507,19 @@ async def async_setup_entry(
                                 )
                             )
 
-    # Runtime polling cadence is a diagnostic entity on each logical service.
-    # It shares the existing coordinator and never makes an additional request.
-    trace = getattr(price_coordinator, "_diagnostic_trace", None)
-    entities.extend(
-        FrankEnergieRefreshIntervalSensor(service, config_entry, trace)
-        for service in service_refreshes(runtime_data)
-    )
-
     try:
         async_add_entities(entities, update_before_add=True)
+        # Keep diagnostic sensors out of the legacy update_before_add=True
+        # batch: a CoordinatorEntity.async_update() would otherwise cause
+        # avoidable network refreshes for each new cadence entity.
+        trace = getattr(price_coordinator, "_diagnostic_trace", None)
+        async_add_entities(
+            [
+                FrankEnergieRefreshIntervalSensor(service, config_entry, trace)
+                for service in service_refreshes(runtime_data)
+            ],
+            update_before_add=False,
+        )
     except Exception:
         _LOGGER.exception("Failed to add entities for entry %s", config_entry.entry_id)
         raise
