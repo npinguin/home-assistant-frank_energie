@@ -20,7 +20,11 @@ from homeassistant.helpers.update_coordinator import UpdateFailed
 async def test_automatic_token_renewal_persisted_once_without_new_api_calls() -> None:
     hass = MagicMock()
     entry = MagicMock()
-    entry.data = {"site_reference": "private-site", "access_token": "old", "token": "old-refresh"}
+    entry.data = {
+        "site_reference": "private-site",
+        "access_token": "old",
+        "token": "old-refresh",
+    }
     api = SimpleNamespace(
         renew_token=AsyncMock(
             return_value=SimpleNamespace(authToken="new", refreshToken="new-refresh")
@@ -75,7 +79,9 @@ async def test_missing_authenticated_user_sites_is_not_false_success() -> None:
 
 
 @pytest.mark.asyncio
-async def test_hourly_scheduler_recovers_missing_core_streams_after_maintenance() -> None:
+async def test_hourly_scheduler_recovers_missing_core_streams_after_maintenance() -> (
+    None
+):
     hass = MagicMock()
     entry = MagicMock()
     component = FrankEnergieComponent(hass, entry)
@@ -110,7 +116,10 @@ async def test_hourly_scheduler_recovers_missing_core_streams_after_maintenance(
     local = datetime(2026, 11, 1, 2, 0, tzinfo=ZoneInfo("Europe/Brussels"))
     utc = local.astimezone(UTC)
     with (
-        patch("custom_components.frank_energie.async_track_utc_time_change", record_callback),
+        patch(
+            "custom_components.frank_energie.async_track_utc_time_change",
+            record_callback,
+        ),
         patch("custom_components.frank_energie.dt_util.now", return_value=local),
         patch("custom_components.frank_energie.dt_util.utcnow", return_value=utc),
     ):
@@ -144,7 +153,10 @@ async def test_hourly_recovery_does_not_call_api_during_maintenance() -> None:
     local = datetime(2026, 11, 1, 1, 15, tzinfo=ZoneInfo("Europe/Brussels"))
     utc = local.astimezone(UTC)
     with (
-        patch("custom_components.frank_energie.async_track_utc_time_change", record_callback),
+        patch(
+            "custom_components.frank_energie.async_track_utc_time_change",
+            record_callback,
+        ),
         patch("custom_components.frank_energie.dt_util.now", return_value=local),
         patch("custom_components.frank_energie.dt_util.utcnow", return_value=utc),
     ):

@@ -790,9 +790,10 @@ async def async_get_config_entry_diagnostics(
     warnings: list[str] = []
     if health["authenticated"] and not health["site_metadata_present"]:
         warnings.append("authenticated_site_metadata_missing")
-    if not health["current_electricity_price_present"] and not health[
-        "current_gas_price_present"
-    ]:
+    if (
+        not health["current_electricity_price_present"]
+        and not health["current_gas_price_present"]
+    ):
         warnings.append("current_prices_missing")
     diagnostics["runtime_warnings"] = warnings
 

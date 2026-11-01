@@ -170,7 +170,9 @@ class FrankEnergieComponent:  # pylint: disable=too-few-public-methods
     ) -> None:
         """Schedule coordinator updates on aligned boundaries and handle midnight local rollover."""
 
-        async def _recover(coordinator: FrankEnergieCoordinator, operation: str) -> None:
+        async def _recover(
+            coordinator: FrankEnergieCoordinator, operation: str
+        ) -> None:
             """Retry a missing core stream and record a redacted outcome."""
             trace = price_coordinator._diagnostic_trace
             trace.record("scheduler", "recovery_requested", operation=operation)
@@ -233,12 +235,13 @@ class FrankEnergieComponent:  # pylint: disable=too-few-public-methods
                 last_fetch = price_coordinator.last_fetch_today
                 stale_today = (
                     last_fetch is None
-                    or last_fetch.astimezone(
-                        ZoneInfo(TIMEZONE_AMSTERDAM)
-                    ).date() != now_local.date()
+                    or last_fetch.astimezone(ZoneInfo(TIMEZONE_AMSTERDAM)).date()
+                    != now_local.date()
                 )
-                missing_coverage = not price_coordinator._today_cache_covers_selected_site(
-                    price_coordinator._static_prices_today, now_local.date()
+                missing_coverage = (
+                    not price_coordinator._today_cache_covers_selected_site(
+                        price_coordinator._static_prices_today, now_local.date()
+                    )
                 )
                 if (
                     not price_coordinator.last_update_success
