@@ -3024,6 +3024,10 @@ class FrankEnergiePriceCoordinator(FrankEnergieCoordinator):
             await super().async_config_entry_first_refresh()
         else:
             _LOGGER.debug("Fresh cache loaded, skipping initial API fetch")
+            # A validated cached snapshot is usable HA state. Publish it with
+            # the supported coordinator API so entities are available at
+            # startup even though no provider request was needed yet.
+            self.async_set_updated_data(self.data)
 
     def _adjust_update_interval(self, now_utc: datetime) -> None:
         """Adjust the coordinator update interval based on cache and publication state."""
