@@ -3247,14 +3247,8 @@ SENSOR_TYPES: tuple[FrankEnergieEntityDescription, ...] = (
         service_name=SERVICE_NAME_COSTS,
         value_fn=lambda data: getattr(_current_month_summary(data), "expectedCosts", None),
         attr_fn=lambda data: (
-            {
-                "Description": data[
-                    DATA_INVOICES
-                ].current_period_invoice.PeriodDescription,
-            }
-            if data[DATA_INVOICES]
-            and data[DATA_INVOICES].current_period_invoice
-            and data[DATA_INVOICES].current_period_invoice.PeriodDescription
+            {ATTR_LAST_UPDATE: summary.lastMeterReadingDate}
+            if (summary := _current_month_summary(data)) is not None
             else {}
         ),
     ),
@@ -3269,15 +3263,8 @@ SENSOR_TYPES: tuple[FrankEnergieEntityDescription, ...] = (
         service_name=SERVICE_NAME_COSTS,
         value_fn=lambda data: getattr(_current_month_summary(data), "expectedCostsPerDay", None),
         attr_fn=lambda data: (
-            {
-                ATTR_LAST_UPDATE: data[DATA_MONTH_SUMMARY].lastMeterReadingDate,
-                "Description": data[
-                    DATA_INVOICES
-                ].current_period_invoice.PeriodDescription,
-            }
-            if data[DATA_MONTH_SUMMARY]
-            and data[DATA_INVOICES]
-            and data[DATA_INVOICES].current_period_invoice
+            {ATTR_LAST_UPDATE: summary.lastMeterReadingDate}
+            if (summary := _current_month_summary(data)) is not None
             else {}
         ),
     ),
@@ -3292,17 +3279,8 @@ SENSOR_TYPES: tuple[FrankEnergieEntityDescription, ...] = (
         service_name=SERVICE_NAME_COSTS,
         value_fn=lambda data: getattr(_current_month_summary(data), "costs_per_day_till_now", None),
         attr_fn=lambda data: (
-            {
-                ATTR_LAST_UPDATE: data[DATA_MONTH_SUMMARY].lastMeterReadingDate,
-                "Description": data[
-                    DATA_INVOICES
-                ].current_period_invoice.PeriodDescription,
-            }
-            if data[DATA_MONTH_SUMMARY]
-            and data[DATA_INVOICES]
-            and data[DATA_INVOICES].current_period_invoice
-            and data[DATA_MONTH_SUMMARY].lastMeterReadingDate
-            and data[DATA_INVOICES].current_period_invoice.PeriodDescription
+            {ATTR_LAST_UPDATE: summary.lastMeterReadingDate}
+            if (summary := _current_month_summary(data)) is not None
             else {}
         ),
     ),
