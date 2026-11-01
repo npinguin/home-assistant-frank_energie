@@ -110,6 +110,7 @@ async def test_valid_disk_cache_installs_price_polling_fallback(
     price_coordinator.settings_coordinator.data = {}
     price_coordinator._async_setup = AsyncMock(return_value=True)
     price_coordinator._is_cache_fresh = MagicMock(return_value=True)
+    price_coordinator.async_set_updated_data = MagicMock()
 
     with patch(
         "custom_components.frank_energie.coordinator.dt_util.utcnow",
@@ -120,6 +121,9 @@ async def test_valid_disk_cache_installs_price_polling_fallback(
     assert price_coordinator.update_interval is not None
     assert price_coordinator.update_interval.total_seconds() > 0
     price_coordinator._is_cache_fresh.assert_called_once_with(now)
+    price_coordinator.async_set_updated_data.assert_called_once_with(
+        price_coordinator.data
+    )
 
 
 def test_hourly_customer_price_does_not_publish_every_quarter(
