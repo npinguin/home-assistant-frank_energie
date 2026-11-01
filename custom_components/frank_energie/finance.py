@@ -180,3 +180,88 @@ def finance_attributes(
     if value is not None:
         attrs["value_status"] = "provider_reported"
     return attrs
+
+# Invoice amounts are deliberately excluded: Belgium bills consumption
+# adjustments later (often M+2), and invoice periods need not be usage months.
+_AUDIT_METRICS = tuple(_FIELDS)
+
+
+def _meter_day(value: object) -> date | None:
+    """Convert typed source dates to a Belgian local calendar day."""
+    if isinstance(value, datetime):
+        return value.astimezone(_AMSTERDAM).date() if value.tzinfo else None
+    if isinstance(value, date):
+        return value
+    if isinstance(value, str):
+        try:
+            if len(value) == 10:
+                return date.fromisoformat(value)
+            parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+            return parsed.astimezone(_AMSTERDAM).date() if parsed.tzinfo else None
+        except ValueError:
+            return None
+    return None
+
+
+def finance_source_reconciliation(
+    current: MonthlyFinanceSnapshot | None, month_summary: object
+) -> str:
+    """Compare two provider totals only when their meter cutoffs coincide.
+
+    This is NOT invoice reconciliation, and it never sums estimated fixed
+    charges or feed-in across unknown sign conventions.
+    """
+    if current is None or month_summary is None:
+        return "not_comparable"
+    current_total, _quality = finance_reading(current, "actual_total")
+    summary_total = getattr(
+        month_summary, "actualCostsUntilLastMeterReadingDate", None
+    )
+    if current_total is None:
+        return "insights_actual_total_unavailable"
+    if (
+        isinstance(summary_total, bool)
+        or not isinstance(summary_total, (float, int))
+        or not math.isfinite(summary_total)
+    ):
+        return "month_summary_actual_total_unavailable"
+
+    current_day = _meter_day(getattr(current.insights, "lastMeterReadingDate", None))
+    summary_day = _meter_day(getattr(month_summary, "lastMeterReadingDate", None))
+    if current_day is None or summary_day is None:
+        return "meter_day_unverified"
+    if current_day != summary_day:
+        return "source_cutoff_mismatch"
+    return (
+        "matched_within_5_cents"
+        if abs(current_total - summary_total) <= 0.05
+        else "provider_totals_disagree"
+    )
+
+
+def finance_evidence(
+    current: MonthlyFinanceSnapshot | None,
+    previous: MonthlyFinanceSnapshot | None,
+    month_summary: object,
+) -> dict[str, object]:
+    """Privacy-safe readiness map: provenance/status only, no amounts or IDs."""
+    result: dict[str, object] = {
+        "invoice_reconciliation_verified": False,
+        "invoice_period_may_differ_from_consumption_month": True,
+        "source_total_reconciliation": finance_source_reconciliation(
+            current, month_summary
+        ),
+    }
+    for label, snapshot in (("current", current), ("previous", previous)):
+        metrics = {}
+        for metric in _AUDIT_METRICS:
+            _value, quality = finance_reading(snapshot, metric)
+            metrics[metric] = quality
+        result[label] = {
+            "period": snapshot.month if snapshot is not None else None,
+            "source_field_presence_verified": (
+                snapshot is not None and snapshot.source_states is not None
+            ),
+            "metric_quality": metrics,
+        }
+    return result
