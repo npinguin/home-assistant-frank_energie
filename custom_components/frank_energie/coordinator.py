@@ -3773,10 +3773,18 @@ class FrankEnergieStatisticsCoordinator(FrankEnergieCoordinator):
         if key == self._previous_finance_cache_key:
             return self._previous_finance_snapshot
         snapshot = await self._fetch_monthly_insights(period)
-        # Cache only a real response. A transient empty/error response must
-        # not suppress recovery for a whole day (especially at month rollover).
+        if snapshot is None:
+            # Keep a previously observed month's provider reading across
+            # temporary outages, scoped to exactly this site and period.
+            # Do not cache the failed refresh as successful; retry next poll.
+            if (
+                self._previous_finance_cache_key is not None
+                and self._previous_finance_cache_key[:2] == key[:2]
+            ):
+                return self._previous_finance_snapshot
+            return None
         self._previous_finance_snapshot = snapshot
-        self._previous_finance_cache_key = key if snapshot is not None else None
+        self._previous_finance_cache_key = key
         return snapshot
 
     async def _async_update_data(self) -> FrankEnergieData:
