@@ -255,6 +255,32 @@ class DiagnosticTrace:
             event.update(_response_metadata(response))
         self._events.append(event)
 
+    def source_states_for_month(self, month: str) -> dict[str, str] | None:
+        """Return only the latest matching raw-field evidence for that month.
+
+        Never fall back to a different period or an older successful response
+        after a failed request. Monetary values and identifiers are not saved.
+        """
+        if _safe_period(month) != month or len(month) != 7:
+            return None
+        for event in reversed(self._events):
+            if (
+                event.get("source") != "graphql_account"
+                or event.get("operation") != "MonthInsights"
+                or event.get("period") != month
+            ):
+                continue
+            roots = event.get("response_roots")
+            if (
+                event.get("outcome") != "ok"
+                or not isinstance(roots, dict)
+                or roots.get("monthInsights") != "present"
+            ):
+                return None
+            states = event.get("month_insights_source_states")
+            return dict(states) if isinstance(states, dict) else None
+        return None
+
     def snapshot(self) -> dict[str, object]:
         """Detached recent history and latest outcome per operation/source."""
         events = [dict(event) for event in self._events]
