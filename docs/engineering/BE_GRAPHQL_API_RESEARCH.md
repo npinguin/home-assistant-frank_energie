@@ -15,8 +15,8 @@
 
 Frank Energie's Belgian help pages explicitly distinguish **variable** and **dynamic** electricity contracts:
 
-- Variable: consumption is settled at a monthly/periodically calculated price under the contract formula. Moving consumption to a cheap market quarter does not itself reduce the supplier's energy unit price. Smart services may deliver a **separate bonus** that appears on the invoice. [Frank: variabel energiecontract](https://www.frankenergie.be/nl/slimme-diensten/variabel-energiecontract).
-- Dynamic: actual hourly/quarter-hour usage and prices can influence settlement. A digital meter plus a valid communicated measurement regime is required. [Frank: slimme meter and variable versus dynamic](https://klantenservice.frankenergie.be/hc/nl-be/articles/19669514031634-Heb-ik-een-slimme-meter-nodig-en-hoe-kom-ik-daaraan).
+- Variable: consumption is settled at a monthly/periodically calculated price under the contract formula. Moving consumption to a cheap market quarter does not itself reduce the supplier's energy unit price. Smart services may deliver a **separate bonus** that appears on the invoice. Frank Energie Belgium public help page: *Variabel energiecontract met Slimme Diensten*.
+- Dynamic: actual hourly/quarter-hour usage and prices can influence settlement. A digital meter plus a valid communicated measurement regime is required. Frank Energie Belgium FAQ: *Heb ik een slimme meter nodig en hoe kom ik daaraan?*.
 - The currently inspected account reports `MODEL`/variable, electricity `SMR3` and gas `SMR1`. These metadata are strong context but do **not** establish the exact contractual billing formula. Verify contract documents and app instead of inferring a dynamic invoice from PT15M market prices.
 - HA Energy Basic must not calculate claimed arbitrage savings for a variable contract from today's public/selected spot intervals. Separate `market_signal`, `contract_monthly_rate`, and `smart_service_bonus` (only when a source reports it) as different economic quantities. Frank is provider facts; Basic owns settlement and actual home kWh.
 
