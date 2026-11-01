@@ -6,6 +6,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from custom_components.frank_energie.const import DATA_BATTERIES, DATA_PV_SYSTEMS
 from custom_components.frank_energie.button import (
     FrankEnergieButtonEntityDescription,
     FrankEnergieRefreshButton,
@@ -29,7 +30,7 @@ def _runtime(authenticated=True, gas=True, inventory=False):
     settings.api.is_authenticated = authenticated
     statistics = MagicMock(update_interval=timedelta(hours=1))
     battery = SimpleNamespace(
-        data={"batteries": SimpleNamespace(batteries=[object()] if inventory else [])}
+        data={DATA_BATTERIES: SimpleNamespace(batteries=[object()] if inventory else [])}
     )
     charger = SimpleNamespace(
         data={"enode_chargers": SimpleNamespace(chargers=[object()] if inventory else [])}
@@ -38,7 +39,7 @@ def _runtime(authenticated=True, gas=True, inventory=False):
         data={"enode_vehicles": SimpleNamespace(vehicles=[object()] if inventory else [])}
     )
     solar = SimpleNamespace(
-        data={"pv_systems": SimpleNamespace(systems=[object()] if inventory else [])}
+        data={DATA_PV_SYSTEMS: SimpleNamespace(systems=[object()] if inventory else [])}
     )
     return SimpleNamespace(
         price_coordinator=price,
