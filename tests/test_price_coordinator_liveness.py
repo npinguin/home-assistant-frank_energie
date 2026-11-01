@@ -164,3 +164,21 @@ def test_quarter_hour_prices_publish_without_api_call(
 
     price_coordinator.async_update_listeners.assert_called_once()
     price_coordinator._fetch_prices_with_fallback.assert_not_awaited()
+
+
+def test_mixed_source_resolutions_do_not_skip_gas_slots(
+    price_coordinator: FrankEnergiePriceCoordinator,
+) -> None:
+    """A 15-minute gas price can change while the electricity tariff is hourly."""
+    price_coordinator._static_prices_today = SimpleNamespace(
+        electricity=SimpleNamespace(resolution_minutes=60, all=[object()]),
+        gas=SimpleNamespace(resolution_minutes=15, all=[object()]),
+    )
+    price_coordinator._maybe_fire_lowest_price_event = MagicMock()
+    price_coordinator._maybe_fire_lowest_4p_event = MagicMock()
+    price_coordinator._maybe_fire_lowest_16p_event = MagicMock()
+    price_coordinator.async_update_listeners = MagicMock()
+
+    price_coordinator.publish_price_slot(datetime(2026, 8, 31, 12, 15, tzinfo=UTC))
+
+    price_coordinator.async_update_listeners.assert_called_once()
