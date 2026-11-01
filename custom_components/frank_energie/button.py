@@ -122,6 +122,11 @@ class FrankEnergieRefreshButton(CoordinatorEntity, ButtonEntity):
         )
 
     @property
+    def available(self) -> bool:
+        """Manual recovery stays possible even if the last poll failed."""
+        return True
+
+    @property
     def extra_state_attributes(self) -> dict[str, object]:
         """Expose actual polling cadence and observed API calls on the button."""
         return service_refresh_attributes(self._service, self._trace)
