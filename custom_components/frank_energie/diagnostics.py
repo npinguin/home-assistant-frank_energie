@@ -262,6 +262,30 @@ def _safe_provider_data_freshness(
         elapsed = (today - stamp).days
         return elapsed if 0 <= elapsed <= 36500 else None
 
+    def is_current_local_month(value: object) -> bool | None:
+        """Report source-period alignment without exposing private dates."""
+        if isinstance(value, datetime):
+            reading = (
+                value.astimezone(ZoneInfo("Europe/Brussels")).date()
+                if value.tzinfo is not None
+                else value.date()
+            )
+        elif isinstance(value, date):
+            reading = value
+        elif isinstance(value, str):
+            try:
+                timestamp = datetime.fromisoformat(value.replace("Z", "+00:00"))
+            except ValueError:
+                return None
+            reading = (
+                timestamp.astimezone(ZoneInfo("Europe/Brussels")).date()
+                if timestamp.tzinfo is not None
+                else timestamp.date()
+            )
+        else:
+            return None
+        return (reading.year, reading.month) == (today.year, today.month)
+
     summary = data.get("month_summary")
     usage = data.get("usage")
     invoices = data.get("invoices")
@@ -299,6 +323,11 @@ def _safe_provider_data_freshness(
             "present": summary is not None,
             "last_meter_reading_age_days": (
                 days_ago(getattr(summary, "lastMeterReadingDate", None))
+                if summary is not None
+                else None
+            ),
+            "last_meter_reading_in_current_local_month": (
+                is_current_local_month(getattr(summary, "lastMeterReadingDate", None))
                 if summary is not None
                 else None
             ),
