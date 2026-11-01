@@ -278,20 +278,13 @@ async def test_remove_entry_deletes_price_cache_store(
         mock_store.async_remove.assert_awaited_once()
 
 
-async def test_aligned_refresh_covers_whole_price_release_window(
+async def test_slot_clock_does_not_duplicate_provider_polling_during_publication(
     hass: HomeAssistant,
 ) -> None:
-    """The 13:00 trigger must not be a single exact-tick point of failure.
+    """Only the coordinator polls the provider during tomorrow publication.
 
-    Regression test: only the exact hour==13, minute==0 tick used to call
-    async_request_refresh(); every other quarter-hour tick in the window
-    just re-broadcast cached data via async_update_listeners() without
-    fetching anything. If this listener's registration (the last step of
-    setup) lost the race against that one exact boundary — plausible on a
-    slow full HA restart competing with every other integration for the
-    event loop — nothing else was scheduled to try again until the next
-    day's 13:00. Now every tick across 13:00-15:00 local retries, so no
-    single tick is load-bearing.
+    The aligned quarter-hour timer handles local price-slot transitions
+    without a duplicate network refresh.
     """
     entry = MockConfigEntry(domain=DOMAIN, data={}, entry_id="test_aligned")
     entry.add_to_hass(hass)
@@ -331,23 +324,25 @@ async def test_aligned_refresh_covers_whole_price_release_window(
 
     for hour, minute in [(13, 0), (13, 15), (13, 45), (14, 45)]:
         price_coordinator.async_request_refresh.reset_mock()
+        price_coordinator.publish_price_slot.reset_mock()
         with patch(
             "homeassistant.util.dt.now",
             return_value=datetime(2026, 7, 21, hour, minute, tzinfo=tz),
         ):
             await captured_callback(datetime.now(tz))
-        price_coordinator.async_request_refresh.assert_awaited_once()
+        price_coordinator.async_request_refresh.assert_not_awaited()
+        price_coordinator.publish_price_slot.assert_called_once()
 
-    # Outside the window: no refresh, just a listener update.
+    # Outside the window: no provider refresh, still a clock transition.
     price_coordinator.async_request_refresh.reset_mock()
-    price_coordinator.async_update_listeners.reset_mock()
+    price_coordinator.publish_price_slot.reset_mock()
     with patch(
         "homeassistant.util.dt.now",
         return_value=datetime(2026, 7, 21, 15, 0, tzinfo=tz),
     ):
         await captured_callback(datetime.now(tz))
     price_coordinator.async_request_refresh.assert_not_called()
-    price_coordinator.async_update_listeners.assert_called_once()
+    price_coordinator.publish_price_slot.assert_called_once()
 
 
 async def test_encryption_decryption(hass: HomeAssistant) -> None:
