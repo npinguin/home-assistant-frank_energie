@@ -194,15 +194,12 @@ class FrankEnergieComponent:  # pylint: disable=too-few-public-methods
                         for key in (DATA_MONTH_SUMMARY, DATA_INVOICES, DATA_USAGE)
                     )
                 else:
-                    source_healthy = (
-                        any(
-                            getattr(current.get(key), "current", None) is not None
-                            for key in (DATA_ELECTRICITY, DATA_GAS)
-                        )
-                        and coordinator._today_cache_covers_selected_site(
-                            coordinator._static_prices_today,
-                            dt_util.now(ZoneInfo(TIMEZONE_AMSTERDAM)).date(),
-                        )
+                    source_healthy = any(
+                        getattr(current.get(key), "current", None) is not None
+                        for key in (DATA_ELECTRICITY, DATA_GAS)
+                    ) and coordinator._today_cache_covers_selected_site(
+                        coordinator._static_prices_today,
+                        dt_util.now(ZoneInfo(TIMEZONE_AMSTERDAM)).date(),
                     )
                 trace.record(
                     "scheduler",
