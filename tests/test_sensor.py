@@ -1587,6 +1587,7 @@ def test_meter_type_handles_empty_and_gas_only_connections(
     assert description.value_fn(data) == expected_primary
     assert description.attr_fn(data)["meter_types_by_segment"] == expected_types
 
+
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
     ("selected", "expect_gas"),
@@ -1653,14 +1654,18 @@ async def test_gas_sensor_registration_follows_selected_site_not_first_site(
         entity.entity_description.key
         for entity in added
         if entity.entity_description.service_name == SERVICE_NAME_USAGE
-        and entity.entity_description.key in (
+        and entity.entity_description.key
+        in (
             "costs_gas_yesterday",
             "usage_gas_yesterday",
         )
     }
     assert ("gas_markup" in gas_price_keys) is expect_gas
     assert ("gas_tomorrow_avg" in gas_price_keys) is expect_gas
-    assert (gas_usage_keys == {"costs_gas_yesterday", "usage_gas_yesterday"}) is expect_gas
+    assert (
+        gas_usage_keys == {"costs_gas_yesterday", "usage_gas_yesterday"}
+    ) is expect_gas
+
 
 def test_real_be_graphql_models_reach_gas_forecast_and_usage_sensors(freezer) -> None:
     """Cross actual pinned GraphQL parsers, typed coordinators, sensor and device."""
