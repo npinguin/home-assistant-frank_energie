@@ -254,3 +254,72 @@ Fix the owning code and add a regression test before checking an issue off.
 Keep acceptance and blockers in this file and the PR; never scatter release
 readiness across independent PR comments. Do not rebase/rewrite a published
 test-release tag. Do not call a draft candidate stable.
+
+
+## 2026-11-01 — Belgian electricity + gas monthly cost truth
+
+The authenticated BE `MODEL` contract already returns `monthSummary`,
+`periodUsageAndCosts`, and `invoices`; **none of these being present proves
+an amount, a fresh gas reading, or a final invoice reconciliation**. The
+`monthInsights` endpoint is opt-in and must be exercised on a new candidate;
+the installed immutable HACS TEST `v2026.11.1.1` still has the option OFF.
+
+Branch work on PR #18 (not installed in HA yet):
+
+- `MonthInsights` now offers **actual total through last meter reading**
+  and **expected cost through last meter reading**, distinct from the projected
+  full-month total, electricity and gas actual costs, expected breakdown,
+  feed-in and volume in the vendor-reported unit.
+- The pinned Python API client converts missing numeric fields to `0.0`.
+  The existing bounded GraphQL observer captures **raw field status** (missing,
+  null, zero, positive, negative) for each requested month. The financial
+  snapshot now carries that same-period provenance. A parsed zero is valid only
+  if the raw field was explicitly zero. Missing, null, malformed and parser-
+  inconsistent fields are unavailable, not zero. No raw money, meters, site
+  references, tokens or invoice identifiers are recorded in diagnostics.
+- `finance_audit` reports each metric's quality without private amounts.
+  `source_total_reconciliation` compares MonthInsights and MonthSummary
+  **only if both source meter-reading cutoff dates match**; a match within
+  five euro cents is **source agreement, not invoice reconciliation**.
+  A disagreement or cutoff mismatch stays explicit. The API may update
+  electricity and gas at different times, so same-cutoff evidence matters.
+- The gas kWh and m³ readings stay separate (never converted without an
+  actual conversion factor). Fixed costs are not invented from a tariff,
+  and projected feed-in is not double-counted or given an inferred sign.
+- Strings, English and Dutch translations have been added for the new
+  total/cutoff sensors, retaining the existing service device and entity IDs.
+
+**Important billing-model distinction:** Frank Energie Belgium explains that
+consumption of month M is adjusted on the bill for M+2; export data becomes
+available only after settlement. Therefore invoice `TotalAmount` for a
+calendar month must **not** be compared directly against MonthInsights'
+consumption month as if they had the same period or represented only usage.
+Official reference:
+https://www.frankenergie.be/nl/export-factuurdata
+
+### Still required to accept a reliable financial overview
+
+1. Exact-head CI (Ruff/Flake8/pytest/quality/links) all green; then publish a
+   controlled new HACS TEST version through the existing release lifecycle.
+   Do not modify previous test tags, merge main or promote stable prematurely.
+2. On a real BE account, enable monthly finance for the test candidate and
+   capture **redacted** diagnostics with two MonthInsights source periods.
+   Validate `source_field_presence_verified` and metric quality for
+   electricity, gas, fixed and feed-in; confirm HA entity registration and
+   actual states. A source missing cost breakdown means explicit unavailable.
+3. Require source cutoff comparison: `matched_within_5_cents` (when dates
+   coincide), or resolve `provider_totals_disagree`; dates that differ mean
+   comparison is deferred. Check the freshness of the gas meter specifically.
+4. Compare the later M+2 **settlement** and available Frank Energie invoice
+   export with the actual consumption-month totals. Verify which Belgian
+   network, capacity, fixed, levy and VAT components are included. A normal
+   installment payment is not proof of consumption-month cost. Do not label
+   forecast or vendor month-insight totals as `invoiced` until reconciled.
+5. Validate month rollover (including year boundary), partial data, signed
+   feed-in, zeros, gas excluded, failed APIs, HACS reload and rollback. Recorder
+   / historical entity behavior is still **unverified** in a live instance.
+
+**Release gate: BLOCKED.** Synthetic tests establish source-contract behavior
+but the account's raw MonthInsights fields, source total agreement, meter
+freshness and Belgian M+2 invoice reconciliation are not yet proven. Finance
+remains opt-in; the installed version and existing releases are untouched.
