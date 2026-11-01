@@ -306,3 +306,27 @@ def test_month_audit_only_returns_quality_not_billing_values_or_identifiers():
     assert audit["previous"]["metric_quality"]["gas_costs"] == "not_published"
     assert "61.2" not in str(audit)
     assert "37.5" not in str(audit)
+
+
+def test_contracted_gas_exclusion_prevents_partial_month_totals():
+    original = _snapshot(gas_excluded=True)
+    contracted = MonthlyFinanceSnapshot(
+        month=original.month,
+        insights=original.insights,
+        retrieved_at=original.retrieved_at,
+        gas_expected=True,
+    )
+    for metric in ("actual_total", "expected_to_reading", "expected_total"):
+        assert finance_reading(contracted, metric) == (
+            None,
+            "gas_excluded_from_total",
+        )
+    assert finance_reading(contracted, "electricity_costs") == (37.5, "available")
+
+    electricity_only = MonthlyFinanceSnapshot(
+        month=original.month,
+        insights=original.insights,
+        retrieved_at=original.retrieved_at,
+        gas_expected=False,
+    )
+    assert finance_reading(electricity_only, "actual_total") == (61.2, "available")
