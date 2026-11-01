@@ -2766,6 +2766,12 @@ async def test_price_coordinator_retries_six_hour_gas_today_and_preserves_partia
     second = await coordinator._async_update_data()
     assert len(second[DATA_GAS].all) == len(_day_prices(today, segment="gas").all)
     assert coordinator._fetch_prices_with_fallback.await_count == 2
+    # The mock bypasses the real fetch function which records per-segment
+    # supplier provenance. Establish the same evidence that a real complete
+    # customer reply would have recorded before checking the cache shortcut.
+    coordinator._remember_price_sources(
+        today, complete, customer_electricity=True, customer_gas=True
+    )
 
     await coordinator._async_update_data()
     assert coordinator._fetch_prices_with_fallback.await_count == 2
