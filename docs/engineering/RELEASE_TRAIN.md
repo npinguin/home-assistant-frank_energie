@@ -389,3 +389,49 @@ price-button success with validation of gas/finance sources.
 ZIP/checksum and immutable prerelease workflow; test actual new-day recovery,
 HACS install/reload, gas/price coverage, monthly finance and HA Recorder
 separately before stable. PR remains Draft; main untouched.
+
+
+### 2026-11-01 — refresh source truth, tariff clock and calendar-month correction
+
+Source-only changes on the same draft PR #18 after the installed immutable
+HACS TEST v2026.11.1.3. These changes are **not installed or accepted** on the
+target Home Assistant instance; do not infer a new published version.
+
+- **Provider refresh:** the price coordinator's dynamic
+  `DataUpdateCoordinator.update_interval` is the only routine price polling
+  mechanism. It retains its existing conditional publication/retry cadence,
+  including the 13:00–15:00 local publication window. The aligned quarter-hour
+  clock no longer issues duplicate routine price API requests.
+- **Business time:** the aligned clock advances local tariff slots, cached
+  midnight price promotion and lowest-price events independently of provider
+  network requests. It publishes only on the real source interval (PT15M,
+  PT60M or the shortest valid interval when electricity/gas differ); it does
+  not manufacture Activity events.
+- **Startup truth:** valid disk-cached prices receive a positive fallback
+  polling interval and are published through the supported coordinator API;
+  a cache hit is not a reason to leave the coordinator without polling.
+- **Fetch truth:** `last_fetch_today` is never moved forward when the price
+  provider returns no usable data and the integration falls back to the old
+  cache. The next provider retry remains eligible.
+- **Recovery truth:** scheduler outcomes use `refresh_ok` only after
+  coordinator success **and** the expected source data is present. An
+  incomplete recovery is explicitly `refresh_incomplete`, even if the
+  request itself returned normally. The diagnostic outcome is privacy-safe.
+- **Finance period truth:** the three legacy cost sensors explicitly labeled
+  "this month" require a last-meter-reading date in the current local
+  calendar month. Previous-month readings are `unavailable`, **not** a
+  fabricated November cost; a real current-month zero remains valid.
+  Last-meter-reading-specific sensors are not silently renamed to current-month.
+  Invoice payment/advance metadata is no longer attached to monthly forecasts.
+- **Regression tests:** diskcache startup liveness, 15/60-minute source
+  transitions, mixed electricity/gas resolution, no extra provider API calls
+  from the aligned clock, empty-source retry eligibility, real-vs-false recovery,
+  rollover dates/UTC-local boundaries and explicit zero.
+
+**Remaining work:** pass exact-head Python 3.14/3.14.2 pytest, Flake8, Ruff,
+Quality Scale and Link Check. Confirm full HA/HACS/Hassfest release gates,
+new-day recovery and source coverage (both electricity and gas), authenticated
+MonthInsights field-level truth, actual entity states, Recorder history,
+reload/rollback, and period-specific invoice component reconciliation. Monthly
+finance stays opt-in and unaccepted. This PR stays **Draft**, `main` remains
+untouched, and prior TEST tags remain immutable.
