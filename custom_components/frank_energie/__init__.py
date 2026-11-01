@@ -6,7 +6,7 @@ import asyncio
 import logging
 import warnings
 from dataclasses import dataclass, field
-from datetime import datetime, time
+from datetime import datetime
 from typing import Any, Final
 from zoneinfo import ZoneInfo
 
@@ -34,7 +34,6 @@ from .const import (
     DOMAIN,
     SERVICE_NAME_BATTERY_SESSIONS,
     TIMEZONE_AMSTERDAM,
-    TOMORROW_PUBLICATION_HOUR_LOCAL,
 )
 from .coordinator import (
     FrankEnergieCoordinator,
@@ -186,7 +185,32 @@ class FrankEnergieComponent:  # pylint: disable=too-few-public-methods
                     "Automatic %s recovery failed (%s)", operation, type(err).__name__
                 )
             else:
-                trace.record("scheduler", "refresh_ok", operation=operation)
+                current = coordinator.data or {}
+                if operation == "Settings":
+                    source_healthy = current.get(DATA_USER_SITES) is not None
+                elif operation == "Statistics":
+                    source_healthy = any(
+                        current.get(key) is not None
+                        for key in (DATA_MONTH_SUMMARY, DATA_INVOICES, DATA_USAGE)
+                    )
+                else:
+                    source_healthy = (
+                        any(
+                            getattr(current.get(key), "current", None) is not None
+                            for key in (DATA_ELECTRICITY, DATA_GAS)
+                        )
+                        and coordinator._today_cache_covers_selected_site(
+                            coordinator._static_prices_today,
+                            dt_util.now(ZoneInfo(TIMEZONE_AMSTERDAM)).date(),
+                        )
+                    )
+                trace.record(
+                    "scheduler",
+                    "refresh_ok"
+                    if coordinator.last_update_success and source_healthy
+                    else "refresh_incomplete",
+                    operation=operation,
+                )
 
         async def _async_aligned_refresh(_: datetime) -> None:
             now_local = dt_util.now(ZoneInfo(TIMEZONE_AMSTERDAM))
@@ -204,7 +228,7 @@ class FrankEnergieComponent:  # pylint: disable=too-few-public-methods
                     price_coordinator._diagnostic_trace.record(
                         "scheduler", "skipped_maintenance", operation="HourlyRecovery"
                     )
-                price_coordinator.async_update_listeners()
+                price_coordinator.publish_price_slot(now_utc)
                 return
 
             # The price button requests a real coordinator refresh; outside
@@ -252,15 +276,10 @@ class FrankEnergieComponent:  # pylint: disable=too-few-public-methods
                     await _recover(price_coordinator, "Prices")
                     return
 
-            # Publication polling stays explicit at aligned quarter-hours.
-            if (
-                time(TOMORROW_PUBLICATION_HOUR_LOCAL, 0)
-                <= now_local.time()
-                < time(15, 0)
-            ):
-                await price_coordinator.async_request_refresh()
-            else:
-                price_coordinator.async_update_listeners()
+            # The price coordinator's own dynamic update_interval is the
+            # single regular API polling mechanism. The aligned clock only
+            # advances cached tariff slots and fires time-based HA events.
+            price_coordinator.publish_price_slot(now_utc)
 
         unsub = async_track_utc_time_change(
             self.hass,
