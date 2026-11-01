@@ -49,14 +49,25 @@ async def async_setup_entry(
     # Prices retains its established unique key/entity ID across upgrades.
     trace = getattr(runtime_data.price_coordinator, "_diagnostic_trace", None)
     for service in service_refreshes(runtime_data):
+        # Keep the established literal key and translation for existing users.
+        # New service buttons use their own stable keys.
+        description = (
+            FrankEnergieButtonEntityDescription(
+                key="refresh_prices",
+                name="Refresh Frank Energie Prices",
+                service_name=SERVICE_NAME_PRICES,
+            )
+            if service.key == "prices"
+            else FrankEnergieButtonEntityDescription(
+                key=f"refresh_{service.key}",
+                name=f"Refresh {service.device_name}",
+                service_name=service.device_name,
+            )
+        )
         entities.append(
             FrankEnergieRefreshButton(
                 coordinator=service.coordinator,
-                description=FrankEnergieButtonEntityDescription(
-                    key=f"refresh_{service.key}",
-                    name=f"Refresh {service.device_name}",
-                    service_name=service.device_name,
-                ),
+                description=description,
                 entry=entry,
                 service=service,
                 trace=trace,
